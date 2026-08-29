@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Knot.ai — Working Prototype</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --ink-950:#0B0E14;
+  --ink-900:#0F131C;
+  --ink-800:#161B26;
+  --ink-700:#232A3B;
+  --ink-600:#333c52;
+  --ink-50:#E8EAF0;
+  --ink-300:#9AA3B8;
+  --technical:#F5A155;
+  --product:#9B8CFB;
+  --candidate:#4FD1C5;
+  --danger:#E2726E;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--ink-950);
+  color:var(--ink-50);
+  font-family:'Inter',sans-serif;
+  min-height:100vh;
+  padding:32px 16px 60px;
+}
+.wrap{max-width:720px;margin:0 auto;}
+
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;
+  font-size:11.5px;letter-spacing:0.14em;color:var(--ink-300);
+  text-transform:uppercase;margin-bottom:8px;
+}
+h1{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;margin:0 0 14px;}
+
+.disclosure{
+  background:var(--ink-800);border:1px solid var(--ink-700);
+  border-radius:10px;padding:12px 16px;
+  font-size:13px;color:var(--ink-300);line-height:1.5;
+  margin-bottom:22px;
+}
+.disclosure b{color:var(--ink-50);}
+
+.status-row{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;}
+.diff-label{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-300);}
+.diff-track{flex:1;min-width:120px;height:6px;border-radius:3px;background:var(--ink-700);overflow:hidden;}
+.diff-fill{height:100%;background:linear-gradient(90deg,var(--candidate),var(--technical));width:50%;transition:width .4s ease;}
+
+.panel-indicator{display:flex;gap:8px;}
+.pchip{
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.04em;
+  padding:4px 10px;border-radius:20px;text-transform:uppercase;
+  border:1px solid var(--ink-700);color:var(--ink-300);
+}
+.pchip.active-technical{background:rgba(245,161,85,0.16);border-color:var(--technical);color:var(--technical);}
+.pchip.active-product{background:rgba(155,140,251,0.16);border-color:var(--product);color:var(--product);}
+
+#transcript{display:flex;flex-direction:column;gap:14px;margin-bottom:18px;}
+
+.turn{max-width:88%;}
+.turn.candidate{margin-left:auto;}
+.turn-meta{
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.04em;
+  text-transform:uppercase;margin-bottom:5px;color:var(--ink-300);
+}
+.turn.technical .turn-meta{color:var(--technical);}
+.turn.product .turn-meta{color:var(--product);}
+.turn.candidate .turn-meta{color:var(--candidate);text-align:right;}
+.turn.system .turn-meta{color:var(--ink-300);}
+.bubble{
+  border-radius:12px;padding:11px 15px;font-size:14.5px;line-height:1.5;
+  background:var(--ink-800);border:1px solid var(--ink-700);
+}
+.turn.candidate .bubble{background:rgba(79,209,197,0.08);border-color:rgba(79,209,197,0.3);}
+.turn.technical .bubble{border-left:3px solid var(--technical);}
+.turn.product .bubble{border-left:3px solid var(--product);}
+.turn.system .bubble{font-style:italic;color:var(--ink-300);font-size:13px;}
+
+.flags{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;}
+.flag{
+  font-family:'JetBrains Mono',monospace;font-size:10px;padding:3px 8px;border-radius:20px;
+}
+.flag.vague{background:rgba(226,114,110,0.14);color:var(--danger);}
+.flag.contradiction{background:rgba(226,114,110,0.22);color:var(--danger);}
+
+.reasoning{
+  margin-top:6px;font-size:11.5px;color:var(--ink-600);
+  cursor:pointer;font-family:'JetBrains Mono',monospace;
+}
+.reasoning-text{display:none;margin-top:4px;color:var(--ink-300);font-size:12px;}
+.reasoning.open .reasoning-text{display:block;}
+
+#inputRow{display:flex;gap:10px;margin-top:8px;}
+#answerInput{
+  flex:1;background:var(--ink-800);border:1px solid var(--ink-700);border-radius:10px;
+  padding:11px 14px;color:var(--ink-50);font-family:'Inter',sans-serif;font-size:14px;
+  resize:none;min-height:44px;
+}
+#answerInput:focus{outline:none;border-color:var(--ink-600);}
+button{
+  font-family:'Inter',sans-serif;font-size:13.5px;font-weight:500;
+  border-radius:10px;padding:0 18px;cursor:pointer;border:none;
+}
+#sendBtn{background:var(--candidate);color:var(--ink-950);}
+#sendBtn:disabled{opacity:0.4;cursor:default;}
+#startBtn{background:var(--candidate);color:var(--ink-950);padding:11px 22px;font-size:14px;}
+#endBtn{
+  background:none;border:1px solid var(--ink-700);color:var(--ink-300);
+  margin-top:16px;padding:9px 16px;font-size:13px;
+}
+#endBtn:hover{border-color:var(--ink-600);color:var(--ink-50);}
+#endBtn:disabled{opacity:0.3;cursor:default;}
+
+.error{color:var(--danger);font-size:13px;margin-top:8px;display:none;}
+.loading{
+  font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink-300);
+  padding:8px 0;display:none;
+}
+
+#report{display:none;margin-top:24px;padding-top:20px;border-top:1px solid var(--ink-700);}
+#report h2{font-family:'Space Grotesk',sans-serif;font-size:19px;margin:0 0 12px;}
+.rec{background:var(--ink-800);border:1px solid var(--ink-700);border-radius:10px;padding:14px 16px;font-size:13.5px;line-height:1.55;margin-bottom:16px;}
+.role-score{margin-bottom:16px;}
+.role-score-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.role-name{font-family:'Space Grotesk',sans-serif;font-size:14.5px;font-weight:600;}
+.role-num{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-300);}
+.score-track{height:5px;border-radius:3px;background:var(--ink-700);margin-bottom:8px;overflow:hidden;}
+.score-fill{height:100%;background:var(--candidate);}
+.role-summary{font-size:13px;color:var(--ink-300);margin-bottom:6px;}
+.evidence{background:var(--ink-900);border:1px solid var(--ink-700);border-radius:8px;padding:8px 11px;font-size:12px;margin-bottom:5px;}
+.evidence .quote{color:var(--ink-50);font-style:italic;}
+.evidence .note{color:var(--ink-300);margin-top:3px;}
+.gap-strength-lists{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px;}
+.gap-strength-lists h3{font-size:12.5px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-300);margin:0 0 6px;}
+.gap-strength-lists ul{margin:0;padding-left:16px;font-size:12.5px;line-height:1.6;color:var(--ink-50);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">Knot.ai · Working prototype</div>
+  <h1>Coordinated AI interview panel</h1>
+  <div class="disclosure">
+    <b>Disclosure:</b> you are interacting with an AI interview panel, not human interviewers.
+    This prototype types instead of speaks (real voice would run through Agora's Real-Time Voice SDK)
+    — but the panel logic underneath, shared context, adaptive difficulty, turn-taking, is live and real.
+  </div>
+
+  <div id="startScreen">
+    <button id="startBtn">Start interview</button>
+  </div>
+
+  <div id="interviewScreen" style="display:none;">
+    <div class="status-row">
+      <span class="diff-label">Difficulty</span>
+      <div class="diff-track"><div class="diff-fill" id="diffFill"></div></div>
+      <div class="panel-indicator">
+        <span class="pchip" id="chipTechnical">Technical</span>
+        <span class="pchip" id="chipProduct">Product</span>
+      </div>
+    </div>
+
+    <div id="transcript"></div>
+    <div class="loading" id="loading">Panel is deliberating…</div>
+    <div class="error" id="errorBox"></div>
+
+    <div id="inputRow">
+      <textarea id="answerInput" placeholder="Type your answer…" rows="2"></textarea>
+      <button id="sendBtn">Send</button>
+    </div>
+    <button id="endBtn" disabled>End interview & get assessment</button>
+  </div>
+
+  <div id="report"></div>
+</div>
+
+<script>
+const MODEL = "claude-sonnet-4-6";
+let transcript = [];
+let difficulty = 0.5;
+let turnCount = 0;
+let busy = false;
+
+const el = id => document.getElementById(id);
+
+async function callClaude(system, userPrompt, maxTokens){
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system: system,
+      messages: [{ role: "user", content: userPrompt }]
+    })
+  });
+  if(!response.ok){
+    throw new Error("API error " + response.status);
+  }
+  const data = await response.json();
+  const textBlock = data.content.find(b => b.type === "text");
+  if(!textBlock) throw new Error("No text in response");
+  return textBlock.text;
+}
+
+function parseJSON(raw){
+  let cleaned = raw.trim();
+  cleaned = cleaned.replace(/^```json/, "").replace(/^```/, "").replace(/```$/, "").trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if(start === -1 || end === -1) throw new Error("No JSON object found in response");
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+function transcriptText(){
+  return transcript.map(t => `[${t.speaker}] ${t.text}`).join("\n");
+}
+
+function addTurn(speaker, text, meta){
+  transcript.push({ speaker, text, meta: meta || {} });
+  renderTurn(speaker, text, meta || {});
+}
+
+function renderTurn(speaker, text, meta){
+  const div = document.createElement("div");
+  div.className = "turn " + speaker;
+  const label = speaker === "candidate" ? "You" : speaker === "system" ? "System" : speaker + " interviewer";
+  let flagsHtml = "";
+  if(meta.vague) flagsHtml += `<span class="flag vague">vague</span>`;
+  if(meta.contradiction) flagsHtml += `<span class="flag contradiction">contradiction</span>`;
+  let reasoningHtml = "";
+  if(meta.reasoning){
+    reasoningHtml = `<div class="reasoning" onclick="this.classList.toggle('open')">why this question ▾<div class="reasoning-text">${escapeHtml(meta.reasoning)}</div></div>`;
+  }
+  div.innerHTML = `
+    <div class="turn-meta">${label}</div>
+    <div class="bubble">${escapeHtml(text)}</div>
+    ${flagsHtml ? `<div class="flags">${flagsHtml}</div>` : ""}
+    ${reasoningHtml}
+  `;
+  el("transcript").appendChild(div);
+  div.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function escapeHtml(s){
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function setDifficultyUI(){
+  el("diffFill").style.width = Math.round(difficulty * 100) + "%";
+}
+
+function setActiveChip(speaker){
+  el("chipTechnical").className = "pchip" + (speaker === "technical" ? " active-technical" : "");
+  el("chipProduct").className = "pchip" + (speaker === "product" ? " active-product" : "");
+}
+
+function showError(msg){
+  const box = el("errorBox");
+  box.textContent = msg;
+  box.style.display = "block";
+}
+function clearError(){
+  el("errorBox").style.display = "none";
+}
+
+const ORCHESTRATOR_SYSTEM = `You are simulating a coordinated AI interview panel with two personas who share full visibility into the same conversation:
+
+TECHNICAL interviewer: evaluates correctness, depth, edge-case awareness. Accepts technically sound answers on their technical merits. Does not push on business framing, that is not their concern.
+
+PRODUCT interviewer: evaluates customer impact, trade-offs, and whether a technically correct solution actually solves a real business problem. Jumps in specifically when a technically correct answer has NOT been connected to customer or business impact.
+
+Given the conversation so far, decide which persona should ask the next question, and what that question is. Pick whichever persona has the strongest reason to speak right now based on their distinct concerns above. Also analyze the candidate's most recent answer.
+
+Respond with ONLY a JSON object, no other text, no markdown fences:
+{
+  "speaker": "technical" or "product",
+  "question": "the next question, in that persona's voice",
+  "reasoning": "one sentence on why this persona and this question, for internal logging",
+  "vagueness": true or false,
+  "contradiction": true or false,
+  "contradiction_note": "if contradiction is true, what it contradicts and why, else empty string",
+  "difficulty_delta": a number between -0.15 and 0.15 based on how strong the candidate's last answer was
+}`;
+
+const ASSESSMENT_SYSTEM = `You produce a structured, evidence-based final interview assessment. Every score must be grounded in specific quotes from the transcript provided. Never invent claims the transcript does not support.
+
+Respond with ONLY a JSON object, no other text, no markdown fences:
+{
+  "overall_recommendation": "one paragraph, plain language",
+  "role_assessments": [
+    {"role": "technical", "score": 0.0-1.0, "summary": "1-2 sentences", "evidence": [{"quote": "short exact quote from transcript", "note": "why this matters"}]},
+    {"role": "product", "score": 0.0-1.0, "summary": "1-2 sentences", "evidence": [{"quote": "short exact quote from transcript", "note": "why this matters"}]}
+  ],
+  "strengths": ["..."],
+  "gaps": ["..."]
+}`;
+
+async function runOrchestratorTurn(){
+  const prompt = `Conversation so far:\n${transcriptText()}\n\nCurrent difficulty level: ${difficulty.toFixed(2)} (0=easy, 1=hard)\n\nDecide the next panel action as instructed.`;
+  const raw = await callClaude(ORCHESTRATOR_SYSTEM, prompt, 500);
+  return parseJSON(raw);
+}
+
+async function handleSend(){
+  const input = el("answerInput");
+  const text = input.value.trim();
+  if(!text){
+    showError("Type an answer before sending.");
+    return;
+  }
+  clearError();
+  input.value = "";
+  addTurn("candidate", text);
+  turnCount++;
+  el("endBtn").disabled = turnCount < 2;
+
+  busy = true;
+  el("sendBtn").disabled = true;
+  el("loading").style.display = "block";
+
+  try{
+    const result = await runOrchestratorTurn();
+    difficulty = Math.max(0, Math.min(1, difficulty + (result.difficulty_delta || 0)));
+    setDifficultyUI();
+    setActiveChip(result.speaker);
+    addTurn(result.speaker, result.question, {
+      reasoning: result.reasoning,
+      vague: result.vagueness,
+      contradiction: result.contradiction
+    });
+    if(result.contradiction && result.contradiction_note){
+      addTurn("system", "Flagged: " + result.contradiction_note);
+    }
+  } catch(e){
+    showError("Something went wrong talking to the panel: " + e.message + ". You can try sending again.");
+  } finally{
+    busy = false;
+    el("sendBtn").disabled = false;
+    el("loading").style.display = "none";
+  }
+}
+
+async function handleStart(){
+  el("startScreen").style.display = "none";
+  el("interviewScreen").style.display = "block";
+  setDifficultyUI();
+  addTurn("system", "You're speaking with an AI interview panel today, not human interviewers.");
+  setActiveChip("technical");
+  addTurn("technical", "Tell me about a system you built or improved recently. Walk me through the technical design.", {
+    reasoning: "Opening question, establishes baseline before adaptive routing kicks in."
+  });
+}
+
+async function handleEnd(){
+  el("endBtn").disabled = true;
+  el("sendBtn").disabled = true;
+  el("loading").textContent = "Generating final assessment…";
+  el("loading").style.display = "block";
+  clearError();
+
+  try{
+    const prompt = `Full interview transcript:\n${transcriptText()}\n\nFinal difficulty level reached: ${difficulty.toFixed(2)}\n\nProduce the structured assessment as instructed.`;
+    const raw = await callClaude(ASSESSMENT_SYSTEM, prompt, 1200);
+    const report = parseJSON(raw);
+    renderReport(report);
+    el("inputRow").style.display = "none";
+  } catch(e){
+    showError("Couldn't generate the assessment: " + e.message + ". You can try ending again.");
+    el("endBtn").disabled = false;
+    el("sendBtn").disabled = false;
+  } finally{
+    el("loading").style.display = "none";
+  }
+}
+
+function renderReport(report){
+  const box = el("report");
+  box.style.display = "block";
+  let html = `<h2>Final assessment</h2><div class="rec">${escapeHtml(report.overall_recommendation)}</div>`;
+
+  report.role_assessments.forEach(ra => {
+    const pct = Math.round(ra.score * 100);
+    html += `
+      <div class="role-score">
+        <div class="role-score-head">
+          <span class="role-name" style="color:var(--${ra.role === 'technical' ? 'technical' : 'product'})">${ra.role} interviewer</span>
+          <span class="role-num">${pct}/100</span>
+        </div>
+        <div class="score-track"><div class="score-fill" style="width:${pct}%"></div></div>
+        <div class="role-summary">${escapeHtml(ra.summary)}</div>
+        ${ra.evidence.map(e => `
+          <div class="evidence">
+            <div class="quote">"${escapeHtml(e.quote)}"</div>
+            <div class="note">${escapeHtml(e.note)}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  });
+
+  html += `<div class="gap-strength-lists">
+    <div><h3>Strengths</h3><ul>${report.strengths.map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul></div>
+    <div><h3>Gaps</h3><ul>${report.gaps.map(g => `<li>${escapeHtml(g)}</li>`).join("")}</ul></div>
+  </div>`;
+
+  box.innerHTML = html;
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+el("startBtn").addEventListener("click", handleStart);
+el("sendBtn").addEventListener("click", () => { if(!busy) handleSend(); });
+el("endBtn").addEventListener("click", () => { if(!busy) handleEnd(); });
+el("answerInput").addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){
+    e.preventDefault();
+    if(!busy) handleSend();
+  }
+});
+</script>
+</body>
+</html>
