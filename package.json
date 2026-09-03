@@ -1,0 +1,22 @@
+{
+  "name": "knot-ai",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Knot.ai — adaptive multi-persona AI voice interview platform (Echo Sphere / Agora hackathon)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:server dev:web",
+    "dev:server": "npm run dev -w @knot/server",
+    "dev:web": "npm run dev -w @knot/web",
+    "build": "npm run build -w @knot/shared && npm run build -w @knot/server && npm run build -w @knot/web",
+    "typecheck": "npm run typecheck -w @knot/shared && npm run typecheck -w @knot/server && npm run typecheck -w @knot/web",
+    "tunnel": "cloudflared tunnel --url http://localhost:8787"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.5.4"
+  }
+}
