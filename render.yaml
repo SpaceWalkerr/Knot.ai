@@ -1,0 +1,44 @@
+# Render Blueprint. In the Render dashboard: New → Blueprint → pick this repo.
+# Fill the `sync: false` secrets after it detects the service (values are in
+# apps/server/.env). PUBLIC_BASE_URL is NOT set here — Render injects
+# RENDER_EXTERNAL_URL automatically and the server falls back to it.
+services:
+  - type: web
+    name: knot-ai
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # `free` sleeps after ~15 min idle — a cold start mid-interview will break the
+    # live voice loop (Agora's agent calls a proxy that isn't awake). Switch to
+    # `starter` for demo day, or ping the URL every few minutes to keep it warm.
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MOCK_AGORA
+        value: "false"
+      - key: ANTHROPIC_LIVE_MODEL
+        value: claude-sonnet-5
+      - key: ANTHROPIC_SUMMARY_MODEL
+        value: claude-sonnet-5
+      - key: TTS_VENDOR
+        value: minimax
+      - key: MINIMAX_TTS_VOICE
+        value: English_radiant_girl
+      - key: AGORA_AGENT_UID
+        value: "1000"
+      - key: DB_PATH
+        value: /tmp/knot.sqlite
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PROXY_SHARED_SECRET
+        sync: false
+      - key: AGORA_APP_ID
+        sync: false
+      - key: AGORA_APP_CERTIFICATE
+        sync: false
+      - key: AGORA_REST_CUSTOMER_ID
+        sync: false
+      - key: AGORA_REST_CUSTOMER_SECRET
+        sync: false

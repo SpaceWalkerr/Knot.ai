@@ -12,7 +12,12 @@ function req(name: string, fallback?: string): string {
 
 export const config = {
   port: Number(process.env.PORT ?? 8787),
-  publicBaseUrl: req("PUBLIC_BASE_URL", "http://localhost:8787"),
+  // On Render, RENDER_EXTERNAL_URL is injected automatically and equals the
+  // service's public URL — no need to hand-set PUBLIC_BASE_URL there.
+  publicBaseUrl:
+    process.env.PUBLIC_BASE_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    "http://localhost:8787",
 
   anthropic: {
     apiKey: req("ANTHROPIC_API_KEY"),

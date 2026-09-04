@@ -11,12 +11,18 @@
     "dev": "npm-run-all --parallel dev:server dev:web",
     "dev:server": "npm run dev -w @knot/server",
     "dev:web": "npm run dev -w @knot/web",
-    "build": "npm run build -w @knot/shared && npm run build -w @knot/server && npm run build -w @knot/web",
+    "build": "npm run build -w @knot/web",
+    "build:all": "npm run build -w @knot/shared && npm run build -w @knot/server && npm run build -w @knot/web",
+    "start": "npm run start -w @knot/server",
     "typecheck": "npm run typecheck -w @knot/shared && npm run typecheck -w @knot/server && npm run typecheck -w @knot/web",
-    "tunnel": "cloudflared tunnel --url http://localhost:8787"
+    "tunnel": "cloudflared tunnel --url http://localhost:8787",
+    "sim": "node scripts/sim.mjs"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5",
     "typescript": "^5.5.4"
+  },
+  "optionalDependencies": {
+    "cloudflared": "^0.7.3"
   }
 }
