@@ -1,18 +1,20 @@
 import type { DifficultyLevel } from "@knot/shared";
 
 export interface AnswerAssessment {
-  /** 0..1 rough quality of the candidate's last answer. */
+  /** rough 0..1 signal, kept for logging/telemetry only — NOT the ladder driver. */
   quality: number;
   vague: boolean;
   contradictory: boolean;
+  tooShort: boolean;
   note?: string;
 }
 
 /**
- * Cheap, deterministic pre-screen of an answer before we ask Claude for the
- * next question. Not a grader — just enough signal to steer the difficulty
- * ladder and decide whether to force a follow-up. Claude still delivers the
- * spoken verdict; this keeps the ladder honest and fast.
+ * Cheap deterministic pre-screen. We deliberately do NOT try to grade
+ * correctness here (a regex can't). We only detect the three things a regex
+ * CAN reliably catch — a non-answer, hedge-without-specifics, and a direct
+ * self-contradiction — and use those to hold/step-down the difficulty ladder
+ * and to force follow-ups. Correctness feedback is the interviewer LLM's job.
  */
 export function assessAnswer(
   text: string,
@@ -21,73 +23,96 @@ export function assessAnswer(
   const t = text.trim().toLowerCase();
   const words = t.split(/\s+/).filter(Boolean);
 
-  if (words.length < 6) {
-    return { quality: 0.15, vague: true, contradictory: false, note: "very short answer" };
-  }
+  const tooShort = words.length < 8;
 
   const vaguePhrases = [
     "it depends",
     "best practice",
     "best practices",
-    "various",
-    "stuff",
-    "things",
+    "various things",
+    "a bunch of stuff",
     "you know",
-    "kind of",
-    "sort of",
+    "kind of just",
     "i guess",
     "generally speaking",
-    "in general",
+    "the usual stuff",
+    "standard stuff",
   ];
   const vagueHits = vaguePhrases.filter((p) => t.includes(p)).length;
 
   const concreteSignals = [
-    /\b\d+(\.\d+)?\s?(ms|s|gb|mb|kb|rps|qps|%|x|k|m|users|nodes|shards|replicas)\b/,
+    /\b\d+(\.\d+)?\s?(ms|s|gb|mb|kb|rps|qps|%|x|k|m|users|nodes|shards|replicas|years|months)\b/,
     /\bbecause\b/,
-    /\bfor example\b/,
-    /\be\.g\.\b/,
-    /\bwe measured\b|\bi measured\b|\bbenchmark/,
+    /\bfor example\b|\bfor instance\b|\be\.g\.\b/,
+    /\bwe (measured|benchmarked|saw|found)\b|\bi (measured|benchmarked|saw|found)\b/,
     /\btrade-?off\b/,
+    /\bspecifically\b/,
   ];
   const concreteHits = concreteSignals.filter((re) => re.test(t)).length;
 
-  // naive contradiction check: candidate now negates a phrase they asserted before
+  // naive contradiction: candidate negates something close to an earlier claim
   let contradictory = false;
   let note: string | undefined;
-  for (const claim of priorClaims) {
-    const key = claim.toLowerCase().slice(0, 40);
-    if (key && t.includes("didn't") && t.includes(key.split(" ")[0])) {
-      contradictory = true;
-      note = `possible contradiction with earlier: "${claim.slice(0, 60)}"`;
-      break;
+  const negation = /\b(didn't|did not|never actually|not really|wasn't|was not)\b/;
+  if (negation.test(t)) {
+    for (const claim of priorClaims) {
+      const kws = claim
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 5);
+      const overlap = kws.filter((w) => t.includes(w)).length;
+      if (overlap >= 2) {
+        contradictory = true;
+        note = `possible contradiction with earlier: "${claim.slice(0, 70)}"`;
+        break;
+      }
     }
   }
 
-  let quality = 0.5 + 0.12 * concreteHits - 0.18 * vagueHits;
-  if (words.length > 40) quality += 0.1;
+  const vague = !tooShort && (vagueHits >= 1 && concreteHits === 0);
+
+  let quality = 0.55 + 0.1 * concreteHits - 0.2 * vagueHits;
+  if (tooShort) quality = 0.2;
   quality = Math.max(0, Math.min(1, quality));
 
-  return {
-    quality,
-    vague: vagueHits >= 2 || (vagueHits >= 1 && concreteHits === 0),
-    contradictory,
-    note,
-  };
+  return { quality, vague, contradictory, tooShort, note };
 }
 
-/** Move at most one step; a weak answer never escalates. */
+/** An answer that doesn't trip any flag — the candidate is handling this level. */
+export function isSolid(a: AnswerAssessment): boolean {
+  return !a.vague && !a.contradictory && !a.tooShort;
+}
+
+/**
+ * Streak-based ladder. Two consecutive solid answers => step up one level.
+ * A flagged answer resets the streak; a contradiction steps down one.
+ * Never moves more than one level per turn; never escalates on a flagged answer.
+ */
 export function nextDifficulty(
   current: DifficultyLevel,
-  a: AnswerAssessment
-): DifficultyLevel {
-  let next = current as number;
-  if (a.contradictory || a.vague) next = current; // hold, we'll force a follow-up
-  else if (a.quality >= 0.7) next = current + 1;
-  else if (a.quality <= 0.35) next = current - 1;
-  next = Math.max(1, Math.min(5, next));
-  return next as DifficultyLevel;
+  a: AnswerAssessment,
+  solidStreak: number
+): { level: DifficultyLevel; solidStreak: number } {
+  let level = current as number;
+  let streak = solidStreak;
+
+  if (a.contradictory) {
+    level = current - 1;
+    streak = 0;
+  } else if (a.vague || a.tooShort) {
+    streak = 0; // hold
+  } else {
+    streak = solidStreak + 1;
+    if (streak >= 2) {
+      level = current + 1;
+      streak = 0;
+    }
+  }
+
+  level = Math.max(1, Math.min(5, level));
+  return { level: level as DifficultyLevel, solidStreak: streak };
 }
 
 export function shouldForceFollowUp(a: AnswerAssessment): boolean {
-  return a.vague || a.contradictory || a.quality <= 0.25;
+  return a.vague || a.contradictory || a.tooShort;
 }

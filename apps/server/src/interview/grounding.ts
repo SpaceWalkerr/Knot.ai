@@ -46,8 +46,11 @@ export async function generateGroundedReport(
     user:
       `Full interview transcript (${turns.length} turns):\n\n` +
       renderTranscriptForSummary(turns),
-    maxTokens: 2500,
-    temperature: 0.15,
+    // this is an extraction task, not deep reasoning — the grounding rigor comes
+    // from the verification pass below, not from the model thinking hard. Keep
+    // effort modest so the token budget goes to the JSON, not to thinking.
+    maxTokens: 6000,
+    effort: "medium",
   });
 
   const parsed = extractJson<RawSummary>(raw);

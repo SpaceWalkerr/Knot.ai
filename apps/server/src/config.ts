@@ -32,10 +32,14 @@ export const config = {
   },
 
   tts: {
-    vendor: (process.env.TTS_VENDOR ?? "elevenlabs") as
+    vendor: (process.env.TTS_VENDOR ?? "minimax") as
+      | "minimax"
       | "elevenlabs"
       | "microsoft"
       | "openai",
+    minimaxVoice: process.env.MINIMAX_TTS_VOICE ?? "English_radiant_girl",
+    minimaxGroupId: process.env.MINIMAX_GROUP_ID ?? "",
+    minimaxApiKey: process.env.MINIMAX_API_KEY ?? "",
     elevenLabsKey: process.env.ELEVENLABS_API_KEY ?? "",
     elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? "",
     azureKey: process.env.AZURE_TTS_KEY ?? "",

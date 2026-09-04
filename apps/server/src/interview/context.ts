@@ -31,8 +31,8 @@ export async function makeRoundDigest(
       model: config.anthropic.summaryModel,
       system: buildDigestPrompt(round, persona),
       user: `Transcript of round ${round}:\n\n${transcript}`,
-      maxTokens: 800,
-      temperature: 0.1,
+      maxTokens: 1200,
+      effort: "low",
     });
     const parsed = extractJson<{
       bullets: string[];

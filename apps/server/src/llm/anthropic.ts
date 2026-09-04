@@ -41,7 +41,13 @@ export function toAnthropicInput(messages: OpenAIMessage[]): {
   const conv: Anthropic.MessageParam[] = [];
   for (const m of messages) {
     if (m.role !== "user" && m.role !== "assistant") continue;
-    conv.push({ role: m.role, content: flattenContent(m.content) });
+    const text = flattenContent(m.content).trim();
+    // Anthropic rejects empty-content messages (e.g. a blank ASR result).
+    if (!text) {
+      if (m.role === "user") conv.push({ role: "user", content: "(no response)" });
+      continue;
+    }
+    conv.push({ role: m.role, content: text });
   }
   // Anthropic requires the first message to be from the user.
   if (conv.length === 0 || conv[0].role !== "user") {
@@ -101,12 +107,14 @@ export async function claudeText(args: {
   system: string;
   user: string;
   maxTokens?: number;
-  temperature?: number;
+  /** low | medium | high | xhigh | max — controls thinking depth / spend. */
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }): Promise<string> {
+  // Note: sonnet-5 / opus-5 removed temperature/top_p/top_k (400 if sent).
   const res = await anthropic.messages.create({
     model: args.model,
     max_tokens: args.maxTokens ?? 1500,
-    temperature: args.temperature ?? 0.2,
+    output_config: { effort: args.effort ?? "medium" },
     system: args.system,
     messages: [{ role: "user", content: args.user }],
   });
@@ -123,5 +131,11 @@ export function extractJson<T>(raw: string): T {
   const start = candidate.indexOf("{");
   const end = candidate.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("no JSON object in response");
-  return JSON.parse(candidate.slice(start, end + 1)) as T;
+  const slice = candidate.slice(start, end + 1);
+  try {
+    return JSON.parse(slice) as T;
+  } catch {
+    // tolerate trailing commas before } or ]
+    return JSON.parse(slice.replace(/,(\s*[}\]])/g, "$1")) as T;
+  }
 }

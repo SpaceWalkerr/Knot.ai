@@ -46,6 +46,25 @@ const VAD = {
 };
 
 function ttsParams(voiceHint: string) {
+  if (config.tts.vendor === "minimax") {
+    // MiniMax T2A. Agora has this vendor pre-provisioned on the project, so
+    // group_id/key are only sent if explicitly set in env (bundled setups omit them).
+    // ⚠️ Confirm this exact param shape on the first live join; if Agora 4xx's for
+    // a missing field, fill MINIMAX_GROUP_ID + MINIMAX_API_KEY from the console.
+    const params: Record<string, unknown> = {
+      model: "speech-02-turbo",
+      voice_setting: {
+        voice_id: config.tts.minimaxVoice, // "English_radiant_girl"
+        speed: 1.0,
+        vol: 1.0,
+        pitch: 0,
+      },
+      audio_setting: { sample_rate: 24000 },
+    };
+    if (config.tts.minimaxGroupId) params.group_id = config.tts.minimaxGroupId;
+    if (config.tts.minimaxApiKey) params.key = config.tts.minimaxApiKey;
+    return { vendor: "minimax", params };
+  }
   if (config.tts.vendor === "elevenlabs") {
     return {
       vendor: "elevenlabs",

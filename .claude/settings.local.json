@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm i *)",
+      "Bash(node -e \"console.log\\('installed', require\\('/Users/suraj/Desktop/Knot.ai/node_modules/@anthropic-ai/sdk/package.json'\\).version\\)\")",
+      "Bash(node -e \"const v=require\\('./node_modules/@anthropic-ai/sdk/package.json'\\).version; process.exit\\(v.startsWith\\('0.12'\\)||parseInt\\(v\\)>=1?0:1\\)\")",
+      "Bash(node -pe \"require\\('./node_modules/@anthropic-ai/sdk/package.json'\\).version\")",
+      "Bash(echo \"SDK ready: $\\(node -pe \"require\\('./node_modules/@anthropic-ai/sdk/package.json'\\).version\"\\)\")"
+    ]
+  }
+}

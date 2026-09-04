@@ -64,10 +64,12 @@ verification against hand-fed transcripts. The live voice loop needs the steps b
 ## Milestones
 
 - [x] **M0** — scaffold, token endpoint, browser joins channel, mic publish
-- [ ] **M1** — single technical persona end-to-end (proxy → Claude → Agora), spoken verdicts, live transcript
-- [ ] **M2** — persona switching (`startRound`/`endRound`, digests, handoff UI)
-- [ ] **M3** — grounded final report + verification pass + report screen
-- [ ] **M4** — polish: difficulty tuning, contradiction pass, TTS pronunciation, disclosure copy
+- [x] **M1** — technical-persona loop end-to-end **against a mock Agora** (proxy → Claude, streamed): adaptive difficulty ladder, sub-area rotation, vague/contradiction flags + forced follow-ups, per-answer spoken verdict, transcript logged as grounding source of truth. *Live Agora run still pending (needs tunnel + `MOCK_AGORA=false`).*
+- [x] **M2** — persona switching: `startRound`/`endRound`, per-round grounded digest, in-character handoff, "other interviewers' context — don't re-run their topics"
+- [x] **M3** — grounded final report: full-transcript summary with mandatory per-claim quotes, then a verification pass that drops any claim not matched to a real candidate turn (`droppedUnverifiedClaims`)
+- [ ] **M4** — live Agora integration: confirm `convoAgent.ts` field names, tune VAD, verify MiniMax `tts` block, check technical-term pronunciation, exercise interruption
+
+All of M1–M3 verified via `scripts/sim.mjs` (an LLM-driven candidate hitting the real proxy). What's **not** yet tested: the actual Agora voice loop.
 
 ---
 
@@ -95,3 +97,14 @@ index.html           the validated no-code prototype (kept for reference / GH Pa
 | `npm run typecheck` | typecheck all workspaces |
 | `npm run build` | build all workspaces |
 | `npm run tunnel` | cloudflared tunnel to :8787 (needs `cloudflared` installed) |
+
+## Local eval harness
+
+`scripts/sim.mjs` runs a full interview against the live proxy with an **LLM-driven candidate** (no Agora, no mic). Use it to sanity-check prompt / difficulty / grounding changes:
+
+```bash
+npm run dev:server        # in one terminal (needs ANTHROPIC_API_KEY)
+node scripts/sim.mjs      # in another
+```
+
+Set `KNOT_DEBUG=1` on the server to see per-turn `[turn]` lines (sub-area, difficulty, streak, flags).
