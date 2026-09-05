@@ -76,10 +76,24 @@ export type Config = typeof config;
  * an audio track. Nothing anywhere says why. Only the `tts.vendor` NAME is
  * validated at join (a bogus vendor 400s; a bogus voice_id does not).
  *
- * So check at boot and say it loudly, because nothing downstream will.
+ * So we check credential presence up front — at boot (below) and over HTTP via
+ * /health/tts — because nothing downstream will tell you the interview is mute.
  */
-if (!config.agora.mock) {
+export interface TtsReadiness {
+  vendor: string;
+  /** false = the agent will join and stay completely silent. */
+  ready: boolean;
+  /** the env vars that need setting, when not ready. */
+  missing: string;
+  /** true when MOCK_AGORA is on, so TTS creds are irrelevant. */
+  mock: boolean;
+}
+
+export function ttsReadiness(): TtsReadiness {
   const t = config.tts;
+  if (config.agora.mock) {
+    return { vendor: t.vendor, ready: true, missing: "", mock: true };
+  }
   const missing =
     t.vendor === "minimax"
       ? !t.minimaxApiKey || !t.minimaxGroupId
@@ -93,10 +107,15 @@ if (!config.agora.mock) {
           ? !t.azureKey || !t.azureRegion
             ? "AZURE_TTS_KEY + AZURE_TTS_REGION"
             : ""
-          : "";
-  if (missing) {
+          : ""; // "openai" is provisioned by Agora itself; nothing to check here
+  return { vendor: t.vendor, ready: missing === "", missing, mock: false };
+}
+
+{
+  const r = ttsReadiness();
+  if (!r.mock && !r.ready) {
     console.warn(
-      `[config] ⚠️  TTS vendor "${t.vendor}" has no credentials set (${missing}).\n` +
+      `[config] ⚠️  TTS vendor "${r.vendor}" has no credentials set (${r.missing}).\n` +
         `[config]     The Agora agent will join the channel and stay completely silent.\n` +
         `[config]     Agora does not report this as an error — set the keys or switch TTS_VENDOR.`
     );

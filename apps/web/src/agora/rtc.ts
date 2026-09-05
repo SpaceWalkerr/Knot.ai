@@ -87,11 +87,22 @@ export async function joinInterview(args: JoinArgs): Promise<RtcHandle> {
 
   let agentTrack: IRemoteAudioTrack | null = null;
 
+  // Audio watchdog. The Agora agent joins and reports RUNNING even when TTS is
+  // misconfigured — it simply never publishes an audio track, and nothing
+  // reports why. If we never hear the interviewer, say so loudly (and once)
+  // instead of letting the candidate sit through a silent interview. The window
+  // starts at join; the agent is asked to join a moment later (api.start), so a
+  // generous timeout avoids false alarms on a slow cold start.
+  let sawAgentAudio = false;
+  let audioWatch: ReturnType<typeof setTimeout> | undefined;
+
   client.on("user-published", async (user: IAgoraRTCRemoteUser, mediaType) => {
     await client.subscribe(user, mediaType);
     if (mediaType === "audio") {
       user.audioTrack?.play();
       agentTrack = user.audioTrack ?? null;
+      sawAgentAudio = true;
+      if (audioWatch) clearTimeout(audioWatch);
       args.onAgentAudioState?.(true);
     }
   });
@@ -150,6 +161,18 @@ export async function joinInterview(args: JoinArgs): Promise<RtcHandle> {
     );
   }
 
+  // Arm the watchdog now that we're in the channel and the agent is being spun up.
+  const AGENT_AUDIO_TIMEOUT_MS = 18_000;
+  audioWatch = setTimeout(() => {
+    if (sawAgentAudio) return;
+    const msg =
+      "No interviewer audio after 18s — the agent joined but isn't publishing " +
+      "an audio track. TTS is almost certainly misconfigured on the server " +
+      "(check GET /health/tts). The interview will be silent until it's fixed.";
+    console.warn("[knot] " + msg);
+    args.onError?.(new Error(msg));
+  }, AGENT_AUDIO_TIMEOUT_MS);
+
   return {
     client,
     getLevels: () => ({
@@ -161,6 +184,7 @@ export async function joinInterview(args: JoinArgs): Promise<RtcHandle> {
       void micTrack?.setEnabled(!m);
     },
     leave: async () => {
+      if (audioWatch) clearTimeout(audioWatch);
       micTrack?.stop();
       micTrack?.close();
       await client.leave();
