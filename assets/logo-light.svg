@@ -1,0 +1,7 @@
+<svg width="440" height="120" viewBox="0 0 440 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="knot.ai">
+  <g transform="translate(14,32) scale(5.2)" fill="none" stroke-linecap="round" stroke-width="1.7">
+    <path d="M2.5 6.5C6.5 6.5 8 13.5 12 13.5C15 13.5 16.5 11.5 17.5 10" stroke="#b7791f"/>
+    <path d="M2.5 13.5C6.5 13.5 8 6.5 12 6.5C15 6.5 16.5 8.5 17.5 10" stroke="#0f9b8a"/>
+  </g>
+  <text x="124" y="92" font-family="'IBM Plex Mono','SFMono-Regular',ui-monospace,Menlo,Consolas,monospace" font-size="56" font-weight="600" letter-spacing="-2" fill="#141a18">knot<tspan fill="#656f6a">.ai</tspan></text>
+</svg>
