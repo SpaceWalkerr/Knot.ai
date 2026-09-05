@@ -45,13 +45,31 @@ async function candidateReply(interviewerHistory) {
 }
 
 // ---- run --------------------------------------------------------------------
+// Plan is configurable so the harness can exercise any persona chain:
+//   KNOT_PLAN=technical,hiring_manager,behavioural node scripts/sim.mjs
+// Turns per round default to 6 for the opener and 4 thereafter (keeps API spend
+// sane); override with KNOT_TURNS=6,4,4 or a single number for every round.
+const PLAN = (process.env.KNOT_PLAN ?? "technical,behavioural")
+  .split(",").map((x) => x.trim()).filter(Boolean);
+const TURNS = (() => {
+  const raw = process.env.KNOT_TURNS;
+  if (!raw) return PLAN.map((_, i) => (i === 0 ? 6 : 4));
+  const parts = raw.split(",").map((n) => Number(n.trim()));
+  return PLAN.map((_, i) => parts[i] ?? parts[parts.length - 1]);
+})();
+
+const PERSONAS = await (await fetch(B + "/api/personas")).json();
+const nameOf = (id) => PERSONAS[id]?.displayName?.split(" ")[0] ?? id;
+
+console.log(cyan(`plan: ${PLAN.map(nameOf).join(" -> ")}  (turns ${TURNS.join(",")})`));
+
 const s = await post("/api/session", {
   candidate: {
     name: "Jordan Lee",
     background:
       "Senior backend engineer, 6 years. Go and Postgres. Led a payments platform migration from a monolith to services. Lists 3 years of Kubernetes on the résumé.",
   },
-  plan: ["technical", "behavioural"],
+  plan: PLAN,
 });
 const SID = s.sessionId;
 await post(`/api/session/${SID}/disclose`);
@@ -86,17 +104,22 @@ async function runRound(label, opener, nTurns) {
   );
 }
 
-await runRound("ROUND 1 — technical", "Hi, I'm Jordan — ready to go.", 6);
+for (let i = 0; i < PLAN.length; i++) {
+  const persona = PLAN[i];
+  const opener =
+    i === 0 ? "Hi, I'm Jordan — ready to go." : `Hi ${nameOf(persona)}, good to meet you.`;
+  await runRound(`ROUND ${i + 1} — ${persona}`, opener, TURNS[i]);
 
-console.log(cyan("advance -> digest r1, start r2"));
-const digestBefore = (await (await fetch(`${B}/api/session/${SID}`)).json());
-console.log(JSON.stringify(await post(`/api/session/${SID}/round/next`), null, 2));
-const afterNext = (await (await fetch(`${B}/api/session/${SID}`)).json());
-console.log("\x1b[90mround-1 digest injected into round 2:\x1b[0m");
-console.log(JSON.stringify(afterNext.context.digests, null, 2));
+  if (i === PLAN.length - 1) break;
 
-history = []; // Agora agent restarts for the new round
-await runRound("ROUND 2 — behavioural", "Hi Alex, good to meet you.", 4);
+  console.log(cyan(`advance -> digest r${i + 1}, start r${i + 2}`));
+  console.log(JSON.stringify(await post(`/api/session/${SID}/round/next`), null, 2));
+  const after = await (await fetch(`${B}/api/session/${SID}`)).json();
+  console.log(`\x1b[90mdigests carried into round ${i + 2}:\x1b[0m`);
+  console.log(JSON.stringify(after.context.digests, null, 2));
+
+  history = []; // Agora restarts the agent for each new persona
+}
 
 console.log(cyan("grounded report"));
 await post(`/api/session/${SID}/end`);

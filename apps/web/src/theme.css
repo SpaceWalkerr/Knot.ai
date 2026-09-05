@@ -1,85 +1,325 @@
-/* Palette lifted from the validated prototype (index.html at repo root). */
-:root {
-  --ink-950: #0b0e14;
-  --ink-900: #0f131c;
-  --ink-800: #161b26;
-  --ink-700: #232a3b;
-  --ink-600: #333c52;
-  --ink-50: #e8eaf0;
-  --ink-300: #9aa3b8;
-  --technical: #f5a155;
-  --product: #9b8cfb;
-  --candidate: #4fd1c5;
-  --hiring_manager: #9b8cfb;
-  --customer: #4fd1c5;
-  --behavioural: #f5a155;
-  --danger: #e2726e;
-  --ok: #5fd08a;
-  --warn: #e6c76b;
+@import "tailwindcss";
+@import "./fonts.css";
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Knot.ai design tokens
+
+   Two rules run through the whole system:
+
+   1. MONO MEASURES, SERIF SPEAKS.  Anything a machine counted — round, level,
+      timer, verdict, citation — is set in IBM Plex Mono. Anything a person said
+      or wrote is set in Source Serif 4. Never mix the two roles.
+
+   2. COLOUR IS ROLE, NOT DECORATION.  Amber is the interviewer's voice, teal is
+      yours, violet is the machine thinking. You should be able to read the live
+      screen's state with the text blurred.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Ground: warm green-grey graphite, not blue-black. Studio, not dark mode ── */
+  --color-graphite-975: #0e1211;
+  --color-graphite-950: #111615;
+  --color-graphite-900: #151a19;
+  --color-graphite-850: #1a211f;
+  --color-graphite-800: #202826;
+  --color-graphite-700: #2a3330;
+  --color-graphite-600: #3a4542;
+
+  /* ── Bone: warm off-white. Text on dark, and the paper of the report ── */
+  --color-bone-50: #faf8f3;
+  --color-bone-100: #f2eee5;
+  --color-bone-200: #e7e4dc;
+  --color-bone-400: #9aa09b;
+  --color-bone-500: #7e8782; /* 4.9:1 on graphite-975 — the floor for body text */
+
+  /* ── Ink: text on the bone report page ── */
+  --color-ink-900: #141a18;
+  --color-ink-700: #333c39;
+  --color-ink-500: #5c6663;
+  --color-ink-300: #8d9793;
+
+  /* ── Voice roles. The semantic core ── */
+  --color-voice-ai: #e9a23b; /* the interviewer speaking */
+  --color-voice-you: #3fc8b4; /* the candidate speaking */
+  --color-voice-think: #8e7cf0; /* the machine working */
+
+  /* ── Verdicts. Data, not chrome ── */
+  --color-verdict-right: #6fcf8e;
+  --color-verdict-partial: #e3c25f;
+  --color-verdict-wrong: #e0736e;
+
+  /* ── Persona identity. Small dots and rules only — never a channel colour,
+        so "amber = AI is talking" always holds ── */
+  --color-persona-technical: #e9a23b;
+  --color-persona-hiring: #c9743f;
+  --color-persona-customer: #c56a93;
+  --color-persona-product: #5fa8d3;
+  --color-persona-behavioural: #a99be0;
+
+  /* ── Type ── */
+  --font-speech: "Source Serif 4", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-measure: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ── Motion. One orchestrated moment; these are its curves ── */
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-breathe: cubic-bezier(0.45, 0, 0.55, 1);
 }
 
-* { box-sizing: border-box; }
-html, body, #root { margin: 0; padding: 0; height: 100%; }
-body {
-  background: var(--ink-950);
-  color: var(--ink-50);
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
+/* ═══════════════════════════════════════════════════════════════════════════
+   Surface semantics
+
+   The live session is a dark instrument; the report is a light document. Both
+   read from the same eight variables, so every component works in either
+   environment without a single conditional.
+
+   These are declared as literal values and RE-declared under the paper surface,
+   not aliased to an indirection. A custom property is substituted where it is
+   declared, so `--color-ground: var(--surface-ground)` on :root would bake in
+   the dark value and quietly ignore any override further down the tree.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  --color-ground: #0e1211;
+  --color-panel: #151a19;
+  --color-raised: #1a211f;
+  --color-hairline: #2a3330;
+  --color-edge: #3a4542;
+  --color-speak: #e7e4dc;
+  --color-dim: #9aa09b;
+  --color-faint: #7e8782;
 }
-button {
-  font: inherit;
-  cursor: pointer;
-  border-radius: 10px;
-  border: 1px solid var(--ink-600);
-  background: var(--ink-800);
-  color: var(--ink-50);
-  padding: 10px 16px;
+
+/* The permanent record. Paper, not screen.
+
+   Every accent is re-cut for the light ground. The screen values are tuned to
+   glow on near-black and drop to ~1.9:1 on cream, which would make the round
+   labels and section headings unreadable. These are the same hues held to at
+   least 4.5:1 on #faf8f3 for text, and above 3:1 for the spine's blocks. */
+[data-surface="paper"] {
+  --color-ground: #faf8f3;
+  --color-panel: #ffffff;
+  --color-raised: #f2eee5;
+  --color-hairline: #ddd8cc;
+  --color-edge: #b9b1a0;
+  --color-speak: #141a18;
+  --color-dim: #4a534f;
+  --color-faint: #656f6a;
+
+  --color-voice-ai: #8a5d0f;
+  --color-voice-you: #17897a;
+  --color-voice-think: #5b47b8;
+
+  --color-verdict-right: #1e7a4c;
+  --color-verdict-partial: #8a6a12;
+  --color-verdict-wrong: #b23a33;
+
+  --color-persona-technical: #8a5d0f;
+  --color-persona-hiring: #8e4a24;
+  --color-persona-customer: #9b3a6b;
+  --color-persona-product: #1f6a94;
+  --color-persona-behavioural: #5a4c9e;
 }
-button.primary { background: var(--candidate); color: #05221f; border-color: transparent; font-weight: 600; }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-input, textarea {
-  font: inherit;
-  background: var(--ink-900);
-  color: var(--ink-50);
-  border: 1px solid var(--ink-700);
-  border-radius: 8px;
-  padding: 10px 12px;
-  width: 100%;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--color-graphite-975);
+    color: var(--color-bone-200);
+    font-family: var(--font-speech);
+    font-size: 16px;
+    line-height: 1.6;
+    font-synthesis-weight: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Machine readouts get tabular figures so counters never jitter as they tick. */
+  .font-measure,
+  [class*="font-measure"] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* One focus treatment everywhere, on both surfaces. Never removed — the whole
+     interview can be driven from the keyboard while the mic is hot. */
+  :focus-visible {
+    outline: 2px solid var(--color-voice-you);
+    outline-offset: 3px;
+  }
+  [data-surface="paper"] :focus-visible {
+    outline-color: #0f8f7f;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-voice-you) 30%, transparent);
+    color: inherit;
+  }
+
+  input,
+  textarea,
+  button,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  textarea {
+    resize: vertical;
+  }
+
+  /* Scrollbars, so the transcript doesn't punch a bright hole in a dark panel. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-graphite-600) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-graphite-600);
+    border-radius: 99px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
 }
-.wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
-.eyebrow {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 11.5px; letter-spacing: 0.14em; color: var(--ink-300);
-  text-transform: uppercase;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The one orchestrated moment: the live voice-state transition.
+
+   Everything else on the site is static. These keyframes belong to the
+   instrument — the channel that is speaking, the breath the interviewer holds
+   while it listens, and the pulse that crosses the baseline while it thinks.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes knot-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scaleY(2.4);
+    opacity: 0.9;
+  }
 }
-h1 { font-family: "Space Grotesk", sans-serif; font-size: 28px; margin: 6px 0 14px; }
-.card {
-  background: var(--ink-800); border: 1px solid var(--ink-700);
-  border-radius: 12px; padding: 18px; margin-bottom: 16px;
+
+/* Thinking: a single pulse crosses the shared baseline, left to right. */
+@keyframes knot-traverse {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(110%);
+    opacity: 0;
+  }
 }
-.disclosure {
-  background: var(--ink-800); border: 1px solid var(--ink-700);
-  border-radius: 10px; padding: 12px 16px; font-size: 13px;
-  color: var(--ink-300); line-height: 1.5;
+
+/* The live lamp. */
+@keyframes knot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.spacer { flex: 1; }
-.badge {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12px; padding: 4px 10px; border-radius: 999px;
-  border: 1px solid var(--ink-600);
+
+/* The instrument waking on the landing screen — the idle line finding its level. */
+@keyframes knot-idle {
+  0%,
+  100% {
+    transform: scaleY(0.6);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
-.badge .dot { width: 8px; height: 8px; border-radius: 50%; }
-.turn { padding: 10px 0; border-bottom: 1px solid var(--ink-700); }
-.turn .who { font-size: 11px; color: var(--ink-300); text-transform: uppercase; letter-spacing: 0.08em; }
-.turn .text { margin-top: 4px; line-height: 1.5; }
-.verdict { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-.verdict.right { background: rgba(95,208,138,0.15); color: var(--ok); }
-.verdict.partially_right { background: rgba(230,199,107,0.15); color: var(--warn); }
-.verdict.wrong { background: rgba(226,114,110,0.15); color: var(--danger); }
-.flag { font-size: 11px; color: var(--warn); margin-left: 8px; }
-.difficulty-meter { display: flex; gap: 3px; }
-.difficulty-meter span { width: 18px; height: 6px; border-radius: 3px; background: var(--ink-700); }
-.difficulty-meter span.on { background: var(--technical); }
-.claim { padding: 10px 0; border-bottom: 1px dashed var(--ink-700); }
-.claim .q { color: var(--ink-300); font-style: italic; font-size: 13px; margin-top: 4px; }
-.muted { color: var(--ink-300); font-size: 13px; }
+
+.anim-breathe {
+  animation: knot-breathe 2.6s var(--ease-breathe) infinite;
+}
+.anim-traverse {
+  animation: knot-traverse 1.6s var(--ease-breathe) infinite;
+}
+.anim-pulse {
+  animation: knot-pulse 1.8s var(--ease-breathe) infinite;
+}
+.anim-idle {
+  animation: knot-idle 3.4s var(--ease-breathe) infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Reduced motion
+
+   The waveform stops animating and becomes a static level meter. Critically the
+   STATE IS STILL READABLE — colour, bar heights and the state word all remain,
+   so nothing that carries meaning is animation-dependent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Print
+
+   The report is designed as a document, so it should survive being one. The
+   paper tokens are already what the screen shows; this mainly strips the
+   controls and stops evidence being split across a page break.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@media print {
+  @page {
+    margin: 18mm 16mm;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  /* Controls have no meaning on paper. */
+  button {
+    display: none !important;
+  }
+
+  /* A claim and the quote that backs it must never land on separate pages —
+     an unsourced claim is exactly what this product refuses to produce. */
+  li,
+  article,
+  blockquote,
+  figure {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}

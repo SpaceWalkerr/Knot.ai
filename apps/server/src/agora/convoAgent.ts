@@ -54,7 +54,8 @@ function ttsParams(voiceHint: string) {
     const params: Record<string, unknown> = {
       model: "speech-02-turbo",
       voice_setting: {
-        voice_id: config.tts.minimaxVoice, // "English_radiant_girl"
+        // Per-persona voice, falling back to the single configured voice.
+        voice_id: config.tts.minimaxVoices[voiceHint] || config.tts.minimaxVoice,
         speed: 1.0,
         vol: 1.0,
         pitch: 0,

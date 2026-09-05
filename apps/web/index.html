@@ -3,7 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0E1211" />
+    <meta
+      name="description"
+      content="Knot.ai — a spoken interview with an AI that adapts as you answer, then reports back with the evidence."
+    />
     <title>Knot.ai — Voice Interview</title>
+
+    <!-- Speech (Source Serif) is above the fold on every screen; measurement (Plex Mono)
+         carries the live state readout. Preload the latin cuts so neither one swaps late. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/source-serif-4-400-700-normal-latin.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/ibm-plex-mono-400-normal-latin.woff2"
+      crossorigin
+    />
   </head>
   <body>
     <div id="root"></div>

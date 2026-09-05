@@ -43,6 +43,18 @@ export const config = {
       | "microsoft"
       | "openai",
     minimaxVoice: process.env.MINIMAX_TTS_VOICE ?? "English_radiant_girl",
+    // Per-persona voices. A panel whose interviewers all sound identical reads
+    // as one interviewer changing subject, so each persona's voiceHint maps to
+    // its own MiniMax voice_id. The catalogue differs per account, so these are
+    // env-driven and anything unset falls back to MINIMAX_TTS_VOICE — a missing
+    // entry degrades to "same voice", it can never 400 the agent join.
+    minimaxVoices: {
+      warm_male: process.env.MINIMAX_VOICE_WARM_MALE ?? "",
+      warm_female: process.env.MINIMAX_VOICE_WARM_FEMALE ?? "",
+      neutral_male: process.env.MINIMAX_VOICE_NEUTRAL_MALE ?? "",
+      neutral_female: process.env.MINIMAX_VOICE_NEUTRAL_FEMALE ?? "",
+      brisk_female: process.env.MINIMAX_VOICE_BRISK_FEMALE ?? "",
+    } as Record<string, string>,
     minimaxGroupId: process.env.MINIMAX_GROUP_ID ?? "",
     minimaxApiKey: process.env.MINIMAX_API_KEY ?? "",
     elevenLabsKey: process.env.ELEVENLABS_API_KEY ?? "",
@@ -55,3 +67,38 @@ export const config = {
 };
 
 export type Config = typeof config;
+
+/**
+ * TTS failures in Agora's Conversational AI Engine are SILENT.
+ *
+ * Verified live: with no MiniMax credentials the agent joins the RTC channel,
+ * Agora reports status RUNNING, `/speak` returns 200 — and it never publishes
+ * an audio track. Nothing anywhere says why. Only the `tts.vendor` NAME is
+ * validated at join (a bogus vendor 400s; a bogus voice_id does not).
+ *
+ * So check at boot and say it loudly, because nothing downstream will.
+ */
+if (!config.agora.mock) {
+  const t = config.tts;
+  const missing =
+    t.vendor === "minimax"
+      ? !t.minimaxApiKey || !t.minimaxGroupId
+        ? "MINIMAX_GROUP_ID + MINIMAX_API_KEY"
+        : ""
+      : t.vendor === "elevenlabs"
+        ? !t.elevenLabsKey
+          ? "ELEVENLABS_API_KEY"
+          : ""
+        : t.vendor === "microsoft"
+          ? !t.azureKey || !t.azureRegion
+            ? "AZURE_TTS_KEY + AZURE_TTS_REGION"
+            : ""
+          : "";
+  if (missing) {
+    console.warn(
+      `[config] ⚠️  TTS vendor "${t.vendor}" has no credentials set (${missing}).\n` +
+        `[config]     The Agora agent will join the channel and stay completely silent.\n` +
+        `[config]     Agora does not report this as an error — set the keys or switch TTS_VENDOR.`
+    );
+  }
+}
