@@ -231,6 +231,52 @@
   }
 }
 
+/* Thinking, the signature. Two strands — amber above, teal below — braid along
+   the baseline while the machine works, and a violet node of thought runs
+   through the weave, tying the two voices into a knot. The strand field is drawn
+   two wavelengths wider than the frame and slid by exactly one wavelength, so
+   the braid flows forever with no seam. */
+@keyframes knot-weave {
+  to {
+    transform: translateX(-88px);
+  }
+}
+
+/* The thought itself, travelling through the braid. */
+@keyframes knot-comet {
+  0% {
+    left: -8%;
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  82% {
+    opacity: 1;
+  }
+  100% {
+    left: 108%;
+    opacity: 0;
+  }
+}
+
+/* The handoff beat. When the turn passes, a bright hairline of the new speaker's
+   colour sweeps once across the baseline — the single orchestrated moment at
+   each change of voice. */
+@keyframes knot-handoff {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
 /* The live lamp. */
 @keyframes knot-pulse {
   0%,
@@ -264,6 +310,30 @@
 }
 .anim-idle {
   animation: knot-idle 3.4s var(--ease-breathe) infinite;
+}
+.anim-weave {
+  animation: knot-weave 2.4s linear infinite;
+}
+.anim-comet {
+  animation: knot-comet 2s var(--ease-breathe) infinite;
+}
+.anim-handoff {
+  animation: knot-handoff 640ms var(--ease-settle) both;
+}
+
+/* The panel arriving, one interviewer at a time, on the connecting screen. */
+@keyframes knot-rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.anim-rise {
+  animation: knot-rise 560ms var(--ease-settle) both;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

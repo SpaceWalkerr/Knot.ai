@@ -320,6 +320,11 @@ export function startDemo(): (() => void) | undefined {
     return;
   }
 
+  if (which === "connecting") {
+    useStore.setState({ demo: true, phase: "connecting", plan, session });
+    return;
+  }
+
   if (which === "report") {
     // The spine is drawn from the real transcript, so the report needs it too.
     useStore.setState({

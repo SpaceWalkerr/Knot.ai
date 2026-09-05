@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 /**
  * The dual-channel voice instrument — the one object the whole design is built
@@ -94,7 +94,17 @@ export function VoiceInstrument({
   const hostRef = useRef<HTMLDivElement>(null);
   const aiPath = useRef<SVGPathElement>(null);
   const youPath = useRef<SVGPathElement>(null);
+  // The bars carry the reading; a filled envelope under them carries the mass,
+  // so a voice looks like a body of sound instead of a row of ticks.
+  const aiArea = useRef<SVGPathElement>(null);
+  const youArea = useRef<SVGPathElement>(null);
   const [width, setWidth] = useState(640);
+
+  // Filters and gradients are referenced by url(#id); the instrument mounts more
+  // than once on a page (landing loop, live hero), so the ids must be unique per
+  // instance or every copy inherits the first one's bloom.
+  const rawId = useId();
+  const uid = rawId.replace(/:/g, "_");
 
   const stateRef = useRef(state);
   const levelsRef = useRef(levels);
@@ -169,8 +179,13 @@ export function VoiceInstrument({
     // bucket, so sub-sampling never quietly drops a syllable.
     let dAi = "";
     let dYou = "";
+    // The envelope traces every tip — silent buckets sit it back on the baseline,
+    // loud ones swell it up — then closes along the baseline into a fillable area.
+    let aAi = `M0 ${h}`;
+    let aYou = "M0 0";
     for (let i = 0; i < n; i++) {
-      const x = (i * step + step / 2).toFixed(1);
+      const cx = i * step + step / 2;
+      const x = cx.toFixed(1);
       const lo = start + Math.floor(i * per);
       const hi = start + Math.floor((i + 1) * per);
       let a = 0;
@@ -182,9 +197,15 @@ export function VoiceInstrument({
       // Sub-pixel bars are noise; silence is carried by the baseline instead.
       if (a > 0.005) dAi += `M${x} ${h}V${(h - a * h).toFixed(1)}`;
       if (y > 0.005) dYou += `M${x} 0V${(y * h).toFixed(1)}`;
+      aAi += `L${x} ${(h - a * h).toFixed(1)}`;
+      aYou += `L${x} ${(y * h).toFixed(1)}`;
     }
+    aAi += `L${w} ${h}Z`;
+    aYou += `L${w} 0Z`;
     aiPath.current?.setAttribute("d", dAi);
     youPath.current?.setAttribute("d", dYou);
+    aiArea.current?.setAttribute("d", aAi);
+    youArea.current?.setAttribute("d", aYou);
   };
 
   // Reduced motion: paint a single static frame per state and stop. Colour,
@@ -244,44 +265,99 @@ export function VoiceInstrument({
   const opacity = (lit: boolean) =>
     state === "muted" ? 0.25 : state === "idle" ? 0.6 : lit ? 1 : 0.34;
 
+  // The bloom scales with the instrument, so the 42px landing loop glows softly
+  // and the 76px live hero glows like it means it.
+  const bloom = Math.max(1.4, h / 20);
+
+  /**
+   * The handoff beat — the one orchestrated moment. When the turn actually
+   * changes hands (into speaking or listening), a bright hairline of the new
+   * voice's colour sweeps once across the baseline. Keyed on a counter so each
+   * genuine handoff re-fires the single sweep; nothing animates on the many
+   * sub-second flickers the state machine smooths over.
+   */
+  const [beat, setBeat] = useState<{ k: number; color: string } | null>(null);
+  const prevState = useRef(state);
+  useEffect(() => {
+    const from = prevState.current;
+    prevState.current = state;
+    if (prefersReducedMotion()) return;
+    if ((state === "speaking" || state === "listening") && from !== state) {
+      setBeat({
+        k: Date.now(),
+        color: state === "speaking" ? "var(--color-voice-ai)" : "var(--color-voice-you)",
+      });
+    }
+  }, [state]);
+
   const channel = (
     kind: "ai" | "you",
-    ref: React.RefObject<SVGPathElement>,
+    barRef: React.RefObject<SVGPathElement>,
+    areaRef: React.RefObject<SVGPathElement>,
     lit: boolean
-  ) => (
-    <svg
-      width="100%"
-      height={h}
-      viewBox={`0 0 ${Math.max(1, width)} ${h}`}
-      preserveAspectRatio="none"
-      aria-hidden="true"
-      className="block"
-      style={{
-        opacity: opacity(lit),
-        transition: "opacity 420ms var(--ease-settle)",
-      }}
-    >
-      <path
-        ref={ref}
-        stroke={kind === "ai" ? "var(--color-voice-ai)" : "var(--color-voice-you)"}
-        strokeWidth={Math.max(2, width / Math.max(1, bars) - 2)}
-        strokeLinecap="butt"
-        fill="none"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
+  ) => {
+    const color = kind === "ai" ? "var(--color-voice-ai)" : "var(--color-voice-you)";
+    const barId = `${uid}-${kind}-bars`;
+    const gradId = `${uid}-${kind}-fill`;
+    const glowId = `${uid}-${kind}-glow`;
+    const sw = Math.max(2, width / Math.max(1, bars) - 2);
+    return (
+      <svg
+        width="100%"
+        height={h}
+        viewBox={`0 0 ${Math.max(1, width)} ${h}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        className="block"
+        style={{
+          opacity: opacity(lit),
+          transition: "opacity 420ms var(--ease-settle)",
+        }}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1={kind === "ai" ? "1" : "0"} x2="0" y2={kind === "ai" ? "0" : "1"}>
+            <stop offset="0" stopColor={color} stopOpacity="0" />
+            <stop offset="1" stopColor={color} stopOpacity={lit ? 0.26 : 0.14} />
+          </linearGradient>
+          <filter id={glowId} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation={bloom} />
+          </filter>
+        </defs>
+
+        {/* Mass: the filled envelope under the bars. */}
+        <path ref={areaRef} fill={`url(#${gradId})`} stroke="none" />
+
+        {/* Bloom: the same bars, blurred and re-laid behind, so the voice reads
+            as light rather than ink. Only the active channel is worth the glow. */}
+        {lit && (
+          <use
+            href={`#${barId}`}
+            filter={`url(#${glowId})`}
+            style={{ opacity: 0.9 }}
+          />
+        )}
+
+        {/* The reading itself — crisp, measured, on top. */}
+        <path
+          id={barId}
+          ref={barRef}
+          stroke={color}
+          strokeWidth={sw}
+          strokeLinecap="round"
+          fill="none"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    );
+  };
 
   const instrument = (
-    <div ref={hostRef} className="min-w-0 flex-1">
-      {channel("ai", aiPath, aiLit)}
+    <div ref={hostRef} className="relative min-w-0 flex-1">
+      {channel("ai", aiPath, aiArea, aiLit)}
 
       {/* The baseline — where the two channels meet, and what silence looks
-          like. Every turn handoff crosses here, and the thinking pulse travels
-          along it. */}
-      {/* 3px tall so the thinking pulse has something to travel through; the
-          line itself stays 1px, centred. */}
-      <div className="relative my-[2px] h-[3px] w-full overflow-hidden">
+          like. The line itself stays 1px, centred in a 3px strip. */}
+      <div className="relative my-[2px] h-[3px] w-full">
         <div
           className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2"
           style={{
@@ -292,18 +368,32 @@ export function VoiceInstrument({
             transition: "background 420ms var(--ease-settle)",
           }}
         />
-        {state === "thinking" && (
-          <div
-            className="anim-traverse absolute inset-y-0 w-1/3"
-            style={{
-              background:
-                "linear-gradient(90deg, transparent, var(--color-voice-think), transparent)",
-            }}
-          />
-        )}
       </div>
 
-      {channel("you", youPath, youLit)}
+      {channel("you", youPath, youArea, youLit)}
+
+      {/* Thinking, the signature: a violet thought running through a braid of the
+          two voices, laid over the whole instrument so it has room to weave. */}
+      {state === "thinking" && <ThinkingWeave width={width} h={h} />}
+
+      {/* The handoff beat: one bright sweep in the new voice's colour, centred on
+          the baseline, each time the turn actually changes hands. */}
+      {beat && (
+        <div
+          className="pointer-events-none absolute inset-x-0 overflow-hidden"
+          style={{ top: h - 2, height: 11 }}
+          aria-hidden="true"
+        >
+          <div
+            key={beat.k}
+            className="anim-handoff absolute inset-y-0 w-2/5"
+            style={{
+              background: `linear-gradient(90deg, transparent, ${beat.color}, transparent)`,
+              filter: "blur(0.4px)",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 
@@ -330,6 +420,88 @@ export function VoiceInstrument({
         </span>
       </div>
       {instrument}
+    </div>
+  );
+}
+
+/* ── The thinking signature ───────────────────────────────────────────────
+   Two strands — amber above the baseline, teal below — braid together while the
+   model works, and a violet node of thought travels through the weave. It's the
+   knot in the name, drawn for the one state where neither voice is talking: the
+   machine holding both sides in mind. Nothing here is load-bearing — the state
+   word and the violet colour still say "thinking" on their own — so it degrades
+   to a static braid under reduced motion.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const LAMBDA = 88; // wavelength; must match the knot-weave keyframe's translate
+
+function weaveD(w: number, cy: number, amp: number, dir: 1 | -1) {
+  const end = w + 2 * LAMBDA;
+  const stepX = LAMBDA / 14;
+  let d = "";
+  for (let x = 0; x <= end; x += stepX) {
+    const y = cy + dir * amp * Math.sin((2 * Math.PI * x) / LAMBDA);
+    d += `${x === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }
+  return d;
+}
+
+function ThinkingWeave({ width, h }: { width: number; h: number }) {
+  const still = prefersReducedMotion();
+  const w = Math.max(1, width);
+  const fullH = 2 * h + 7; // ai + strip + you, matching the instrument stack
+  const cy = h + 3.5; // the baseline's centre within that stack
+  const amp = Math.min(13, h * 0.2);
+  const think = "var(--color-voice-think)";
+
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      <svg
+        width={w}
+        height={fullH}
+        viewBox={`0 0 ${w} ${fullH}`}
+        className="absolute inset-0"
+        style={{ overflow: "hidden" }}
+      >
+        {/* The braid is drawn two wavelengths wide and slid by exactly one, so
+            the weave flows seamlessly. Both strands ride one <g> so they move as
+            one cloth. */}
+        <g className={still ? undefined : "anim-weave"}>
+          <path
+            d={weaveD(w, cy, amp, -1)}
+            stroke="var(--color-voice-ai)"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            style={{ opacity: 0.55 }}
+          />
+          <path
+            d={weaveD(w, cy, amp, 1)}
+            stroke="var(--color-voice-you)"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            style={{ opacity: 0.55 }}
+          />
+        </g>
+      </svg>
+
+      {/* The thought itself, travelling through the braid with a soft violet
+          bloom. Held out under reduced motion, where the static braid carries
+          the meaning instead. */}
+      {!still && (
+        <div
+          className="anim-comet absolute"
+          style={{
+            top: cy,
+            width: Math.round(h * 0.9),
+            height: Math.round(h * 0.9),
+            transform: "translate(-50%, -50%)",
+            borderRadius: "999px",
+            background: `radial-gradient(circle, ${think} 0%, color-mix(in oklab, ${think} 45%, transparent) 35%, transparent 70%)`,
+          }}
+        />
+      )}
     </div>
   );
 }

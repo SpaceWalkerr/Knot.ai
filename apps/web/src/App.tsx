@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useStore } from "./store.js";
 import { Landing } from "./screens/Landing.js";
 import { Live } from "./screens/Live.js";
+import { Connecting } from "./components/Connecting.js";
 import { ReportView } from "./components/ReportView.js";
 import { Button } from "./components/ui.js";
 
@@ -30,6 +31,7 @@ export function App() {
     <>
       {error && <ErrorBar message={error} />}
       {(phase === "setup" || phase === "disclosure") && <Landing />}
+      {phase === "connecting" && <Connecting />}
       {(phase === "live" || phase === "between" || phase === "ended") && <Live />}
       {phase === "report" && report && <ReportView report={report} />}
     </>

@@ -4,6 +4,7 @@ import type {
   RoundDigest,
   SessionContext,
   Turn,
+  Verdict,
 } from "./types.js";
 import { PERSONAS } from "./personas.js";
 
@@ -12,6 +13,40 @@ export const AI_DISCLOSURE_TEXT =
   "and is being transcribed. You can interrupt me at any time, ask me to repeat or " +
   "rephrase, and you can end the session whenever you like. Nothing here is a hiring " +
   "decision — it's practice with structured feedback. Ready to start?";
+
+/**
+ * The spoken verdict.
+ *
+ * Asking the interviewer to *say* an exact sentence did not hold: across live
+ * runs it substituted "That's a solid overview", "That's a clear decision
+ * framework", and so on — an exact prose prefix competes with the model's own
+ * phrasing instincts and loses.
+ *
+ * So the model emits a machine tag instead, which is out-of-band and therefore
+ * easy to comply with, and the PROXY renders the sentence. The phrase the
+ * candidate hears is now produced by us and is verbatim by construction.
+ */
+export const VERDICT_TAGS = ["right", "partial", "wrong"] as const;
+export type VerdictTag = (typeof VERDICT_TAGS)[number];
+
+export const VERDICT_SPOKEN: Record<VerdictTag, string> = {
+  right: "That's right.",
+  partial: "That's partially right.",
+  wrong: "That's not right.",
+};
+
+export const VERDICT_FROM_TAG: Record<VerdictTag, Verdict> = {
+  right: "right",
+  partial: "partially_right",
+  wrong: "wrong",
+};
+
+/** Tolerant of case and stray spaces; the tag must lead the reply. */
+export const VERDICT_TAG_RE = /^\s*<\s*(right|partial|wrong)\s*>\s*/i;
+
+/** The model sometimes writes the tag AND the sentence; drop the duplicate. */
+export const LEADING_VERDICT_PROSE_RE =
+  /^(that'?s\s+(partially\s+right|not\s+right|right|correct|incorrect))[.,!]?\s*/i;
 
 const DIFFICULTY_GUIDE: Record<DifficultyLevel, string> = {
   1: "warm-up: definitions, 'walk me through', low-stakes recall. No trick questions.",
@@ -72,13 +107,14 @@ export function buildRoundSystemPrompt(args: {
     `3. Start at difficulty ${startingDifficulty} (${DIFFICULTY_GUIDE[startingDifficulty]}).`,
     `   Adjust difficulty by at most one level per question, based on answer quality.`,
     `   Never jump straight to hard questions. A weak answer means you stay or step down and probe, not escalate.`,
-    `4. FEEDBACK FORMAT — every reply that responds to a candidate answer MUST begin with one of these three phrases, verbatim, as the very first words:`,
-    `   "That's right." — the answer was correct and adequately complete.`,
-    `   "That's partially right." — partly correct, missing something, or too vague to fully credit.`,
-    `   "That's not right." — incorrect, or dodged the question.`,
-    `   Then 1–2 sentences on WHY, quoting or paraphrasing what they actually said. Then your follow-up or next question.`,
-    `   Do not substitute "Exactly!", "Good", "That makes sense", etc. — use the exact phrase. This is non-negotiable.`,
-    `   (Your very first line of the round, before any answer exists, is exempt — just greet and ask.)`,
+    `4. VERDICT TAG — every reply that responds to a candidate answer MUST begin with exactly one of these tags, as the very first characters, before any other text:`,
+    `   <right>    the answer was correct and adequately complete.`,
+    `   <partial>  partly correct, missing something, or too vague to fully credit.`,
+    `   <wrong>    incorrect, or dodged the question.`,
+    `   The tag is machine-read and stripped before anything is spoken — it is replaced with the spoken verdict for you. Do NOT write the verdict sentence yourself ("That's right", "That's partially right", "That's not right"); just the tag.`,
+    `   After the tag, write ONLY what you say aloud: 1–2 sentences on WHY, quoting or paraphrasing what they actually said, then your follow-up or next question.`,
+    `   Do NOT open that spoken part with a judgement of your own — no "Exactly!", "Good", "Nice", "That makes sense", and in particular do not start with "That's…". The verdict sentence is already spoken for you, so go straight to the reason.`,
+    `   (Your very first line of the round, before any answer exists, takes no tag — just greet and ask.)`,
     `5. If an answer is vague ("it depends", "we used best practices" with no specifics) or contradicts something said earlier in ANY round, do not move on — ask a narrow, concrete follow-up to pin it down.`,
     `6. Keep your turns short and conversational — this is spoken aloud. Aim for 2–4 sentences. No bullet points, no markdown, no numbered lists, no headings, no code blocks in speech.`,
     `7. Cover 5–6 questions spanning at least THREE different sub-areas of your focus — never spend the whole round drilling one topic. When one area is covered, move to the next with a short transition. Only after ~5–6 questions, give one brief closing line (no overall verdict — that comes later) and then stop asking.`,

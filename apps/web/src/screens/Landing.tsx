@@ -3,7 +3,7 @@ import { useStore } from "../store.js";
 import { api } from "../api.js";
 import { joinInterview } from "../agora/rtc.js";
 import { PersonaPlan } from "../components/PersonaPlan.js";
-import { VoiceInstrument, type VoiceState } from "../components/VoiceInstrument.js";
+import { VoiceInstrument, VoiceStateWord, type VoiceState } from "../components/VoiceInstrument.js";
 import { Wordmark } from "../components/KnotMark.js";
 import { Button, errorText, Field, TextArea, TextInput } from "../components/ui.js";
 import { personaFirstName } from "../design/personas.js";
@@ -60,9 +60,16 @@ export function Landing() {
         </span>
       </header>
 
-      {/* The same component that runs the live screen, playing one exchange on
-          a loop — and doubling as the key to the colour system. */}
-      <VoiceInstrument state={demoState} half={42} legend className="mb-10 sm:mb-14" />
+      {/* The hero: the same instrument that runs the live screen, at full size,
+          playing one exchange on a loop and narrating itself — so the object the
+          product is built on, and the key to its colour system, is the first
+          thing you meet. */}
+      <div className="mb-12 sm:mb-16">
+        <VoiceInstrument state={demoState} half={58} legend />
+        <div className="mt-3.5 sm:pl-[6.5rem]">
+          <VoiceStateWord state={demoState} />
+        </div>
+      </div>
 
       {phase === "disclosure" ? <Consent /> : <Setup />}
     </div>
@@ -197,6 +204,12 @@ function Consent() {
   async function accept() {
     if (!session) return;
     setBusy(true);
+    // Hand straight to the connecting screen — the mic is really opening now, and
+    // that screen is the intentional moment built for exactly this wait.
+    set({ phase: "connecting" });
+    // The join is often quick; hold the connecting screen long enough that the
+    // moment registers rather than flashing past.
+    const dwell = new Promise((r) => setTimeout(r, 2100));
     try {
       await api.disclose(session.sessionId);
 
@@ -216,6 +229,7 @@ function Consent() {
       });
 
       const first = await api.start(session.sessionId);
+      await dwell;
       set({
         rtc,
         phase: "live",
@@ -225,7 +239,9 @@ function Consent() {
         startedAtMs: Date.now(),
       });
     } catch (e) {
-      set({ error: errorText(e) });
+      // Don't strand the candidate on the connecting screen — drop back to the
+      // consent gate with the error, so "start" is right there to retry.
+      set({ error: errorText(e), phase: "disclosure" });
     } finally {
       setBusy(false);
     }

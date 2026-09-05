@@ -11,6 +11,11 @@ import {
   buildRoundSystemPrompt,
   buildTurnDirective,
   AI_DISCLOSURE_TEXT,
+  VERDICT_SPOKEN,
+  VERDICT_FROM_TAG,
+  VERDICT_TAG_RE,
+  LEADING_VERDICT_PROSE_RE,
+  type VerdictTag,
 } from "@knot/shared";
 import { config } from "../config.js";
 import { appendTurn, getSession, getTurns, saveSession } from "../db.js";
@@ -44,6 +49,8 @@ interface RoundRuntime {
   questionsInSubArea: number;
   /** the round's opening line — used to anchor the model in-character on turn 1. */
   greeting: string;
+  /** the persona prompt for this round; the proxy injects it on every turn. */
+  systemPrompt: string;
 }
 
 const QUESTIONS_PER_SUBAREA = 2;
@@ -64,6 +71,14 @@ function runtimeFor(session: Session): RoundRuntime {
       subAreaIndex: 0,
       questionsInSubArea: 0,
       greeting: "",
+      // Rebuilt rather than stored, so a server restart mid-round still sends
+      // the right persona prompt (with whatever digests exist by now).
+      systemPrompt: buildRoundSystemPrompt({
+        persona: session.context.currentPersona,
+        ctx: session.context,
+        startingDifficulty: session.context.currentDifficulty,
+        isFirstRound: session.context.currentRound <= 1,
+      }),
     };
     runtimes.set(session.id, r);
   }
@@ -122,6 +137,7 @@ export async function startRound(
     subAreaIndex: 0,
     questionsInSubArea: 0,
     greeting,
+    systemPrompt,
   });
 
   return { handoffLine, persona };
@@ -262,8 +278,15 @@ export async function runProxyTurn(
       ? [{ role: "assistant", content: rt.greeting }, ...incoming]
       : incoming;
 
+  // The persona prompt is injected HERE rather than relied upon from the
+  // caller. Agora is configured with `system_messages` at join time, but it
+  // also applies `max_history: 32`, and `scripts/sim.mjs` never sent one at
+  // all — which meant the persona character, the cross-round digests and the
+  // verdict rule were silently absent from every simulated run. The proxy owns
+  // interview control, so it owns the prompt too.
   const withDirective: OpenAIMessage[] = [
-    ...anchored,
+    { role: "system", content: rt.systemPrompt },
+    ...anchored.filter((m) => m.role !== "system" && m.role !== "developer"),
     { role: "system", content: directive },
   ];
   const { system, messages } = toAnthropicInput(withDirective);
@@ -271,7 +294,17 @@ export async function runProxyTurn(
   // Stream from Claude so Agora's TTS can start speaking ASAP. We normalise for
   // TTS per-chunk on a best-effort basis and re-normalise the full text before
   // logging. (Chunk-boundary term splits are rare and low-impact for a demo.)
-  let reply = "";
+  // The reply opens with a verdict tag (<right>/<partial>/<wrong>) which must
+  // never reach TTS. Hold the first few characters back until the tag either
+  // resolves or clearly isn't coming, then speak OUR verdict sentence in front
+  // of the model's words. `spoken` is the clean text; `onDelta` gets the
+  // TTS-normalised version.
+  //
+  // (Assistant prefill would make the tag structurally unskippable, but
+  // sonnet-5 rejects it: "This model does not support assistant message
+  // prefill". The instruction alone holds well because a tag is out-of-band —
+  // unlike the exact spoken sentence it replaced, it doesn't compete with the
+  // model's own phrasing.)
   const stream = anthropic.messages.stream({
     model: config.anthropic.liveModel,
     max_tokens: 600,
@@ -282,25 +315,92 @@ export async function runProxyTurn(
     system,
     messages,
   });
+
+  const HEAD_LIMIT = 24;
+  let spoken = "";
+  let head = "";
+  let tag: VerdictTag | undefined;
+  let tagResolved = false;
+  // True between emitting the verdict sentence and the first word after it, so
+  // the join gets exactly one space however the deltas happen to split.
+  let needsGap = false;
+
+  const emit = (text: string) => {
+    if (!text) return;
+    spoken += text;
+    onDelta?.(normalizeForTts(text));
+  };
+
+  const emitBody = (text: string) => {
+    if (needsGap) {
+      const trimmed = text.replace(/^\s+/, "");
+      if (!trimmed) return; // still whitespace — wait for a real word
+      needsGap = false;
+      emit(" " + trimmed);
+      return;
+    }
+    emit(text);
+  };
+
   for await (const ev of stream) {
     if (
-      ev.type === "content_block_delta" &&
-      ev.delta.type === "text_delta" &&
-      ev.delta.text
+      ev.type !== "content_block_delta" ||
+      ev.delta.type !== "text_delta" ||
+      !ev.delta.text
     ) {
-      reply += ev.delta.text;
-      onDelta?.(normalizeForTts(ev.delta.text));
+      continue;
+    }
+    const text = ev.delta.text;
+
+    if (tagResolved) {
+      emitBody(text);
+      continue;
+    }
+
+    head += text;
+    const m = VERDICT_TAG_RE.exec(head);
+    if (m) {
+      tagResolved = true;
+      const rest = head.slice(m[0].length).replace(LEADING_VERDICT_PROSE_RE, "");
+      if (hasRealAnswer) {
+        // WE say the verdict, verbatim — the model only supplied the judgement.
+        tag = m[1].toLowerCase() as VerdictTag;
+        emit(VERDICT_SPOKEN[tag]);
+        needsGap = true;
+      }
+      // A round opener grades nothing, so any tag the model emitted anyway is
+      // dropped without a verdict sentence.
+      emitBody(rest);
+    } else if (head.length >= HEAD_LIMIT) {
+      // No tag is coming. Speak what we buffered rather than swallowing it.
+      tagResolved = true;
+      emitBody(head);
     }
   }
-  reply = reply.trim();
+  // Stream ended while still inside the buffer (a very short reply).
+  if (!tagResolved) emitBody(head);
 
-  // 4. Verdict for the report tally. The interviewer's spoken prefix wins when
-  //    it clearly states one; otherwise fall back to the deterministic flags.
-  const spoken = parseVerdict(reply);
+  // An empty reply would leave the agent silent mid-interview.
+  const reply =
+    spoken.trim() ||
+    "Sorry — could you say a little more about that?";
+
+  if (process.env.KNOT_DEBUG && hasRealAnswer) {
+    console.log(`[turn] verdict tag: ${tag ?? "MISSING (fell back to flags)"}`);
+  }
+
+  // 4. Verdict for the report tally. The model's tag is the correctness signal
+  //    (a regex can't grade an answer); if it went missing, fall back to the
+  //    model's prose, then to the deterministic flags. Whatever we land on is
+  //    the SAME value the candidate just heard, so the spoken verdict and the
+  //    report tally can never disagree.
+  const fromProse = parseVerdict(reply);
   const verdict: Verdict = !hasRealAnswer
     ? "not_scored"
-    : spoken !== "not_scored"
-    ? spoken
+    : tag
+    ? VERDICT_FROM_TAG[tag]
+    : fromProse !== "not_scored"
+    ? fromProse
     : verdictFromAssessment(assessment);
 
   // 5. Log the interviewer turn.

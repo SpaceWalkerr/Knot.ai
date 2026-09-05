@@ -20,6 +20,25 @@ export function ReportView({ report }: { report: FinalReport }) {
   const turns = useStore((s) => s.turns);
   const minutes = Math.max(1, Math.round((report.generatedAtMs - (turns[0]?.tsMs ?? 0)) / 60000));
 
+  // The read: the first sentence of the overall carries the thesis, so it's
+  // lifted out as the one thing the candidate sees first — set large — and the
+  // rest stays below as the supporting prose.
+  const m = report.overall.match(/^(.*?[.!?])\s+([\s\S]*)$/);
+  const lede = m ? m[1] : report.overall;
+  const rest = m ? m[2] : "";
+
+  // The shape of the session: every scored answer, aggregated into one bar. It's
+  // the report's one loud use of colour — the verdict palette at full strength.
+  const tally = report.perRound.reduce(
+    (acc, r) => ({
+      right: acc.right + (r.verdictTally.right ?? 0),
+      partially_right: acc.partially_right + (r.verdictTally.partially_right ?? 0),
+      wrong: acc.wrong + (r.verdictTally.wrong ?? 0),
+    }),
+    { right: 0, partially_right: 0, wrong: 0 }
+  );
+  const scored = tally.right + tally.partially_right + tally.wrong;
+
   return (
     <div data-surface="paper" className="min-h-dvh bg-ground text-speak">
       <header className="mx-auto flex w-full max-w-[880px] items-center justify-between px-5 py-5 sm:px-8">
@@ -32,27 +51,40 @@ export function ReportView({ report }: { report: FinalReport }) {
       <main className="mx-auto w-full max-w-[880px] px-5 pb-24 sm:px-8">
         {/* ── Masthead ── */}
         <div className="border-t border-edge pt-8">
-          <h1 className="text-[clamp(2rem,5.5vw,3rem)] font-semibold leading-[1.05] tracking-[-0.02em]">
+          <p className="font-measure text-[12px] text-dim">
+            assessment · {report.candidateName.toLowerCase()}
+          </p>
+          <h1 className="mt-1 text-[clamp(1.7rem,4.4vw,2.6rem)] font-semibold leading-[1.05] tracking-[-0.02em]">
             {report.candidateName}
           </h1>
-          <p className="font-measure mt-2 text-[12px] text-dim">
-            assessment · {report.perRound.length}{" "}
-            {report.perRound.length === 1 ? "round" : "rounds"}
-            {turns.length > 0 && ` · ${turns.length} turns · ~${minutes} min`}
-          </p>
         </div>
 
+        {/* ── The read: the one thing, first ── */}
+        <p className="mt-7 max-w-[26ch] text-[clamp(1.5rem,3.4vw,2.15rem)] font-normal leading-[1.28] tracking-[-0.01em] text-speak">
+          {lede}
+        </p>
+
+        {/* ── The shape of the session ── */}
+        {scored > 0 && <VerdictShape tally={tally} total={scored} />}
+
+        <p className="font-measure mt-6 text-[12px] text-dim">
+          {report.perRound.length} {report.perRound.length === 1 ? "round" : "rounds"}
+          {turns.length > 0 && ` · ${turns.length} turns · ~${minutes} min`}
+        </p>
+
         {turns.length > 0 && (
-          <div className="mt-9">
+          <div className="mt-10">
             <SessionSpine turns={turns} />
           </div>
         )}
 
         {/* ── Overall ── */}
-        <section className="mt-12">
-          <SectionRule>overall</SectionRule>
-          <p className="mt-5 max-w-[62ch] text-[18px] leading-[1.62]">{report.overall}</p>
-        </section>
+        {rest && (
+          <section className="mt-14">
+            <SectionRule>the rest of it</SectionRule>
+            <p className="mt-5 max-w-[62ch] text-[18px] leading-[1.62]">{rest}</p>
+          </section>
+        )}
 
         {/* ── The evidence ── */}
         <section className="mt-14 grid gap-10 md:grid-cols-2 md:gap-12">
@@ -176,6 +208,58 @@ const TALLY_TINT: Record<Verdict, string> = {
   wrong: "var(--color-verdict-wrong)",
   not_scored: "var(--color-faint)",
 };
+
+/* ── The shape of the session ─────────────────────────────────────────────
+   One bar, every scored answer, in proportion. This is the report's single
+   loudest moment — the verdict palette at full strength — and the fastest read
+   on the page: you see the balance of the session before you read a word of it.
+   ────────────────────────────────────────────────────────────────────────── */
+
+function VerdictShape({
+  tally,
+  total,
+}: {
+  tally: { right: number; partially_right: number; wrong: number };
+  total: number;
+}) {
+  const seg: [Verdict, number, string][] = [
+    ["right", tally.right, "right"],
+    ["partially_right", tally.partially_right, "partly"],
+    ["wrong", tally.wrong, "not right"],
+  ];
+  return (
+    <div className="mt-8">
+      <div
+        className="flex h-3.5 w-full max-w-[440px] gap-[3px]"
+        role="img"
+        aria-label={seg.map(([, n, label]) => `${n} ${label}`).join(", ")}
+      >
+        {seg.map(([k, n]) =>
+          n > 0 ? (
+            <span
+              key={k}
+              className="rounded-[2px]"
+              style={{ flex: n, background: TALLY_TINT[k] }}
+            />
+          ) : null
+        )}
+      </div>
+      <div className="font-measure mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[11.5px]">
+        {seg.map(([k, n, label]) => (
+          <span key={k} className="inline-flex items-center gap-1.5" style={{ color: TALLY_TINT[k] }}>
+            <span
+              className="h-[7px] w-[7px] rounded-[1px]"
+              style={{ background: TALLY_TINT[k] }}
+              aria-hidden="true"
+            />
+            {n} {label}
+          </span>
+        ))}
+        <span className="text-faint">· {total} answers scored</span>
+      </div>
+    </div>
+  );
+}
 
 function Tally({ tally }: { tally: Record<Verdict, number> }) {
   const rows: [Verdict, string][] = [

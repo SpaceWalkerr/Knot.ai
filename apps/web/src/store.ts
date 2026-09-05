@@ -4,7 +4,7 @@ import { DEFAULT_PLAN } from "@knot/shared";
 import type { RtcHandle } from "./agora/rtc.js";
 import type { VoiceState } from "./components/VoiceInstrument.js";
 
-type Phase = "setup" | "disclosure" | "live" | "between" | "ended" | "report";
+type Phase = "setup" | "disclosure" | "connecting" | "live" | "between" | "ended" | "report";
 
 interface State {
   phase: Phase;
