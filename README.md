@@ -106,23 +106,23 @@ so control holds even though Agora truncates history to the last 32 messages.
 sequenceDiagram
     autonumber
     participant C as Candidate
-    participant A as Agora Convo AI<br/>(ASR · TTS · VAD)
-    participant P as Knot proxy<br/>/v1/chat/completions
+    participant A as Agora (ASR/TTS/VAD)
+    participant P as Knot proxy
     participant M as Claude
     participant DB as SQLite
 
     C->>A: speaks (audio)
-    A->>P: OpenAI-format messages (transcribed turn)
-    P->>P: assessAnswer() — vague? contradictory? too short?
-    P->>P: nextDifficulty() + sub-area rotation
+    A->>P: transcribed turn (OpenAI format)
+    P->>P: assessAnswer - vague? contradictory? too short?
+    P->>P: nextDifficulty + sub-area rotation
     P->>DB: log candidate turn (+ flags)
-    P->>M: persona prompt + history + [DIRECTOR NOTE]
-    M-->>P: stream: partial-tag, reason, next question
+    P->>M: persona prompt + history + director note
+    M-->>P: stream - partial tag, reason, next question
     P->>P: strip verdict tag, speak OUR verdict sentence
-    P-->>A: streamed reply text (TTS-normalised)
+    P-->>A: streamed reply (TTS-normalised)
     A-->>C: interviewer voice
     P->>DB: log interviewer turn (+ verdict, difficulty)
-    Note over C,A: candidate can barge in at any point;<br/>Agora VAD cuts the agent off
+    Note over C,A: candidate can barge in anytime; Agora VAD cuts the agent off
 ```
 
 ---
