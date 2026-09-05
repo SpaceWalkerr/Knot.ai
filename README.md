@@ -122,7 +122,7 @@ sequenceDiagram
     P-->>A: streamed reply (TTS-normalised)
     A-->>C: interviewer voice
     P->>DB: log interviewer turn (+ verdict, difficulty)
-    Note over C,A: candidate can barge in anytime; Agora VAD cuts the agent off
+    Note over C,A: candidate can barge in anytime and Agora VAD cuts the agent off
 ```
 
 ---
