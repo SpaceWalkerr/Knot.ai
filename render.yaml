@@ -26,6 +26,12 @@ services:
         value: minimax
       - key: MINIMAX_TTS_VOICE
         value: English_radiant_girl
+      - key: MINIMAX_TTS_MODEL
+        value: speech-2.8-turbo
+      # Agora managed-reseller MiniMax resource for this project (not a secret —
+      # it references a credential Agora holds; the credential is never exposed).
+      - key: MINIMAX_RESOURCE_ID
+        value: 155b2afcadce4c93a85231c74e2e71d6
       - key: AGORA_AGENT_UID
         value: "1000"
       - key: DB_PATH

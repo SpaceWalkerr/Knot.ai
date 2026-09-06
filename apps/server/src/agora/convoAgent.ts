@@ -47,23 +47,25 @@ const VAD = {
 
 function ttsParams(voiceHint: string) {
   if (config.tts.vendor === "minimax") {
-    // MiniMax T2A. Agora has this vendor pre-provisioned on the project, so
-    // group_id/key are only sent if explicitly set in env (bundled setups omit them).
-    // ⚠️ Confirm this exact param shape on the first live join; if Agora 4xx's for
-    // a missing field, fill MINIMAX_GROUP_ID + MINIMAX_API_KEY from the console.
+    // Exact shape of the working no-code console agent (confirmed by Agora
+    // support). The project's MiniMax is a MANAGED RESELLER resource: reference
+    // it by `resource_id`; do NOT send group_id / key / api key — the credential
+    // is not exposed. Keep params minimal — matching the known-good block.
     const params: Record<string, unknown> = {
-      model: "speech-02-turbo",
+      model: config.tts.minimaxModel, // "speech-2.8-turbo"
       voice_setting: {
-        // Per-persona voice, falling back to the single configured voice.
+        // Per-persona voice, falling back to the single confirmed voice.
+        // NB only English_radiant_girl is confirmed working on this project.
         voice_id: config.tts.minimaxVoices[voiceHint] || config.tts.minimaxVoice,
-        speed: 1.0,
-        vol: 1.0,
-        pitch: 0,
       },
-      audio_setting: { sample_rate: 24000 },
     };
-    if (config.tts.minimaxGroupId) params.group_id = config.tts.minimaxGroupId;
-    if (config.tts.minimaxApiKey) params.key = config.tts.minimaxApiKey;
+    if (config.tts.minimaxResourceId) {
+      params.resource_id = config.tts.minimaxResourceId;
+    } else if (config.tts.minimaxGroupId && config.tts.minimaxApiKey) {
+      // fallback: a company-owned MiniMax credential instead of the managed one
+      params.group_id = config.tts.minimaxGroupId;
+      params.key = config.tts.minimaxApiKey;
+    }
     return { vendor: "minimax", params };
   }
   if (config.tts.vendor === "elevenlabs") {

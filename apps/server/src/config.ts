@@ -43,6 +43,13 @@ export const config = {
       | "microsoft"
       | "openai",
     minimaxVoice: process.env.MINIMAX_TTS_VOICE ?? "English_radiant_girl",
+    // Agora managed-reseller MiniMax: referenced by resource_id, NOT a key. This
+    // is the project's provisioned resource (confirmed via Agora support); the
+    // credential itself is never exposed. speech-2.8-turbo is the console agent's
+    // model. Overridable in case the project's resource changes.
+    minimaxModel: process.env.MINIMAX_TTS_MODEL ?? "speech-2.8-turbo",
+    minimaxResourceId:
+      process.env.MINIMAX_RESOURCE_ID ?? "155b2afcadce4c93a85231c74e2e71d6",
     // Per-persona voices. A panel whose interviewers all sound identical reads
     // as one interviewer changing subject, so each persona's voiceHint maps to
     // its own MiniMax voice_id. The catalogue differs per account, so these are
@@ -96,8 +103,9 @@ export function ttsReadiness(): TtsReadiness {
   }
   const missing =
     t.vendor === "minimax"
-      ? !t.minimaxApiKey || !t.minimaxGroupId
-        ? "MINIMAX_GROUP_ID + MINIMAX_API_KEY"
+      ? // a managed-reseller resource_id OR a company-owned group_id+key is enough
+        !t.minimaxResourceId && !(t.minimaxApiKey && t.minimaxGroupId)
+        ? "MINIMAX_RESOURCE_ID (or MINIMAX_GROUP_ID + MINIMAX_API_KEY)"
         : ""
       : t.vendor === "elevenlabs"
         ? !t.elevenLabsKey
