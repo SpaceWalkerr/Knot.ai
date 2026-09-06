@@ -34,6 +34,8 @@ export interface RunningAgent {
   agentId: string;
   channel: string;
   mock: boolean;
+  /** what we sent Agora for TTS + the raw join response — for /debug. */
+  diag?: { ttsBlock: unknown; joinStatus: number; joinResponse: string };
 }
 
 // --- Turn detection / interruption. Explicit on purpose (do NOT rely on defaults). ---
@@ -164,7 +166,27 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
   const agentId = json.agent_id ?? json.agentId;
   if (!agentId) throw new Error(`Agora join: no agent_id in ${text}`);
   console.log(`[convoAgent] agent ${agentId} started on ${args.channel}`);
-  return { agentId, channel: args.channel, mock: false };
+  return {
+    agentId,
+    channel: args.channel,
+    mock: false,
+    diag: { ttsBlock: body.properties.tts, joinStatus: res.statusCode, joinResponse: text },
+  };
+}
+
+/** Poll Agora for an agent's live status (undocumented but real). */
+export async function getAgentStatus(agentId: string): Promise<unknown> {
+  if (config.agora.mock || agentId.startsWith("mock-")) return { status: "MOCK" };
+  const res = await request(
+    `${BASE}/${config.agora.appId}/agents/${agentId}`,
+    { method: "GET", headers: { Authorization: authHeader() } }
+  );
+  const text = await res.body.text();
+  try {
+    return { httpStatus: res.statusCode, ...JSON.parse(text) };
+  } catch {
+    return { httpStatus: res.statusCode, raw: text };
+  }
 }
 
 export async function stopAgent(agentId: string): Promise<void> {

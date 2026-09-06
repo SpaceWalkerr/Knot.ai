@@ -56,6 +56,9 @@ interface RoundRuntime {
 const QUESTIONS_PER_SUBAREA = 2;
 const runtimes = new Map<string, RoundRuntime>();
 
+/** Last Agora join diagnostics per session — exposed via /api/session/:id/debug. */
+export const agentDiag = new Map<string, Record<string, unknown>>();
+
 function runtimeFor(session: Session): RoundRuntime {
   let r = runtimes.get(session.id);
   if (!r) {
@@ -118,6 +121,14 @@ export async function startRound(
     greeting,
     voiceHint: p.voiceHint,
   });
+  if (agent.diag) {
+    agentDiag.set(session.id, {
+      round: roundIndex,
+      persona,
+      agentId: agent.agentId,
+      ...agent.diag,
+    });
+  }
 
   session.agentId = agent.agentId;
   session.status = "live";

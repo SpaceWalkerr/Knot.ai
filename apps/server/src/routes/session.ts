@@ -7,10 +7,11 @@ import type {
   Session,
 } from "@knot/shared";
 import { DEFAULT_PLAN, PERSONAS, AI_DISCLOSURE_TEXT } from "@knot/shared";
-import { config } from "../config.js";
+import { config, ttsReadiness } from "../config.js";
 import { getReport, getSession, getTurns, saveReport, saveSession } from "../db.js";
 import { buildRtcToken } from "../agora/token.js";
-import { endRound, roundCount, startRound } from "../interview/engine.js";
+import { getAgentStatus } from "../agora/convoAgent.js";
+import { agentDiag, endRound, roundCount, startRound } from "../interview/engine.js";
 import { generateGroundedReport } from "../interview/grounding.js";
 
 export function registerSessionRoutes(app: FastifyInstance): void {
@@ -148,6 +149,31 @@ export function registerSessionRoutes(app: FastifyInstance): void {
     const s = load(req, reply);
     if (!s) return;
     return s;
+  });
+
+  // Diagnostics for the live Agora agent: exactly what we sent for TTS, Agora's
+  // raw join response, and the agent's current status. Use this to debug a
+  // silent interviewer without digging through server logs.
+  app.get("/api/session/:id/debug", async (req, reply) => {
+    const s = load(req, reply);
+    if (!s) return;
+    const diag = agentDiag.get(s.id) ?? null;
+    let liveStatus: unknown = null;
+    if (s.agentId) {
+      liveStatus = await getAgentStatus(s.agentId).catch((e) => ({
+        error: String(e),
+      }));
+    }
+    return {
+      sessionId: s.id,
+      status: s.status,
+      agentId: s.agentId ?? null,
+      channel: s.channel,
+      publicBaseUrl: config.publicBaseUrl,
+      tts: ttsReadiness(),
+      joinDiag: diag,
+      liveStatus,
+    };
   });
 
   app.get("/api/personas", async () => PERSONAS);
