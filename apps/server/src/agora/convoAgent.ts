@@ -137,6 +137,12 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
     },
   };
 
+  // Always log what we send Agora for TTS + the raw response — TTS failures are
+  // silent, so this is the only place to see what actually happened.
+  console.log(
+    `[convoAgent] join ${args.channel} tts=${JSON.stringify(body.properties.tts)}`
+  );
+
   const res = await request(
     `${BASE}/${config.agora.appId}/join`,
     {
@@ -150,12 +156,14 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
   );
 
   const text = await res.body.text();
+  console.log(`[convoAgent] join response ${res.statusCode}: ${text}`);
   if (res.statusCode >= 300) {
     throw new Error(`Agora join failed ${res.statusCode}: ${text}`);
   }
   const json = JSON.parse(text) as { agent_id?: string; agentId?: string };
   const agentId = json.agent_id ?? json.agentId;
   if (!agentId) throw new Error(`Agora join: no agent_id in ${text}`);
+  console.log(`[convoAgent] agent ${agentId} started on ${args.channel}`);
   return { agentId, channel: args.channel, mock: false };
 }
 
