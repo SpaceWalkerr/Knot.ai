@@ -39,8 +39,17 @@ document.getElementById("start").onclick = async () => {
   document.getElementById("log").textContent = "";
   verdict("starting minimal agent…", "wait");
   try {
-    const r = await fetch("/api/diag/start", { method: "POST" }).then(x => x.json());
-    log("diag/start ->", r);
+    // ?channel=&token=&uid=&appId= => listen-only on an EXISTING channel (real flow)
+    const qp = new URLSearchParams(location.search);
+    let r;
+    if (qp.get("channel")) {
+      r = { appId: qp.get("appId"), channel: qp.get("channel"),
+            listenerToken: qp.get("token"), listenerUid: Number(qp.get("uid")) || qp.get("uid") };
+      log("listen-only on existing channel", r.channel);
+    } else {
+      r = await fetch("/api/diag/start", { method: "POST" }).then(x => x.json());
+      log("diag/start ->", r);
+    }
     agentId = r.agentId;
     if (!AgoraRTC) { verdict("Agora SDK failed to load from CDN", "bad"); return; }
     log("Agora SDK", AgoraRTC.VERSION);
