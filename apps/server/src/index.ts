@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { config, ttsReadiness } from "./config.js";
 import { registerSessionRoutes } from "./routes/session.js";
 import { registerChatCompletions } from "./routes/chatCompletions.js";
+import { registerDiagRoutes } from "./routes/diag.js";
 import "./db.js"; // init schema
 
 const app = Fastify({
@@ -47,6 +48,7 @@ app.get("/health/tts", async (_req, reply) => {
 
 registerSessionRoutes(app);
 registerChatCompletions(app);
+registerDiagRoutes(app);
 
 // In production the server also serves the built web app (single origin, no CORS).
 // apps/server/src/index.ts -> ../../web/dist

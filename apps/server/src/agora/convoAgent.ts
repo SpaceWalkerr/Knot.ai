@@ -189,6 +189,44 @@ export async function getAgentStatus(agentId: string): Promise<unknown> {
   }
 }
 
+/**
+ * DIAGNOSTIC: the stripped-down join the Agora concierge recommended — greeting
+ * + TTS only, no llm.url, no vad/asr/advanced_features. If this agent speaks its
+ * greeting, TTS + RTC publish work and the fault is in our full join body. If it
+ * stays silent too, the fault is RTC token / channel / subscription.
+ */
+export async function startAgentMinimal(args: {
+  channel: string;
+  greeting: string;
+}): Promise<{ agentId: string; joinStatus: number; joinResponse: string }> {
+  const body = {
+    name: `knotdiag-${args.channel}-${nanoid(6)}`,
+    properties: {
+      channel: args.channel,
+      token: buildRtcToken(args.channel, config.agora.agentUid),
+      agent_rtc_uid: String(config.agora.agentUid),
+      remote_rtc_uids: ["*"],
+      enable_string_uid: false,
+      llm: { greeting_message: args.greeting },
+      tts: ttsParams("neutral_female"),
+    },
+  };
+  console.log(`[diag] minimal join ${args.channel} body=${JSON.stringify(body.properties)}`);
+  const res = await request(`${BASE}/${config.agora.appId}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: authHeader() },
+    body: JSON.stringify(body),
+  });
+  const text = await res.body.text();
+  console.log(`[diag] minimal join response ${res.statusCode}: ${text}`);
+  const json = JSON.parse(text) as { agent_id?: string };
+  return {
+    agentId: json.agent_id ?? "",
+    joinStatus: res.statusCode,
+    joinResponse: text,
+  };
+}
+
 export async function stopAgent(agentId: string): Promise<void> {
   if (config.agora.mock || agentId.startsWith("mock-")) {
     console.log(`[convoAgent:MOCK] stop ${agentId}`);

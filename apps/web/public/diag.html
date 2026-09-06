@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knot.ai — RTC audio diagnostic</title>
+<style>
+  body { font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; background:#0b0e14; color:#e8eaf0; margin:0; padding:24px; }
+  h1 { font-size:16px; margin:0 0 16px; }
+  button { font:inherit; padding:8px 16px; margin-right:8px; border:1px solid #333c52; border-radius:8px; background:#161b26; color:#e8eaf0; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  #verdict { font-size:20px; font-weight:700; margin:20px 0; padding:14px; border-radius:10px; background:#161b26; }
+  .ok { color:#5fd08a; } .bad { color:#e2726e; } .wait { color:#e6c76b; }
+  pre { white-space:pre-wrap; word-break:break-all; background:#0f131c; border:1px solid #232a3b; border-radius:8px; padding:12px; max-height:50vh; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>Knot.ai — RTC audio diagnostic (listen-only, no mic)</h1>
+<button id="start">Start diagnostic</button>
+<button id="stop" disabled>Stop</button>
+<div id="verdict" class="wait">idle</div>
+<pre id="log"></pre>
+
+<script src="https://cdn.jsdelivr.net/npm/agora-rtc-sdk-ng@4.23.4/AgoraRTC_N-production.js"></script>
+<script>
+const log = (...a) => {
+  document.getElementById("log").textContent += a.map(x => typeof x === "string" ? x : JSON.stringify(x, null, 2)).join(" ") + "\n";
+};
+const verdict = (txt, cls) => {
+  const el = document.getElementById("verdict");
+  el.textContent = txt; el.className = cls;
+};
+
+let client, agentId, watch;
+
+document.getElementById("start").onclick = async () => {
+  document.getElementById("start").disabled = true;
+  document.getElementById("log").textContent = "";
+  verdict("starting minimal agent…", "wait");
+  try {
+    const r = await fetch("/api/diag/start", { method: "POST" }).then(x => x.json());
+    log("diag/start ->", r);
+    agentId = r.agentId;
+    if (!AgoraRTC) { verdict("Agora SDK failed to load from CDN", "bad"); return; }
+    log("Agora SDK", AgoraRTC.VERSION);
+
+    client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    client.on("user-joined", u => log("EVENT user-joined uid=" + u.uid));
+    client.on("user-left", u => log("EVENT user-left uid=" + u.uid));
+    client.on("user-published", async (u, kind) => {
+      log("EVENT user-published uid=" + u.uid + " kind=" + kind);
+      await client.subscribe(u, kind);
+      if (kind === "audio") {
+        clearTimeout(watch);
+        verdict("✅ AUDIO TRACK RECEIVED from uid " + u.uid + " — playing it now", "ok");
+        u.audioTrack.play();
+        setInterval(() => log("  agent volume level: " + (u.audioTrack.getVolumeLevel?.() ?? "n/a")), 1000);
+      }
+    });
+    client.on("exception", e => log("EVENT exception", e));
+
+    await client.join(r.appId, r.channel, r.listenerToken || null, r.listenerUid);
+    log("joined channel " + r.channel + " as listener uid " + r.listenerUid);
+    verdict("in channel — waiting for the agent to publish audio…", "wait");
+
+    watch = setTimeout(async () => {
+      const st = await fetch("/api/diag/status/" + agentId).then(x => x.json()).catch(e => ({ err: String(e) }));
+      log("agent status after 25s ->", st);
+      verdict("❌ NO audio track after 25s — agent joined but never published audio", "bad");
+    }, 25000);
+  } catch (e) {
+    verdict("error: " + e, "bad");
+    log("ERROR", String(e));
+  } finally {
+    document.getElementById("stop").disabled = false;
+  }
+};
+
+document.getElementById("stop").onclick = async () => {
+  clearTimeout(watch);
+  try { await client?.leave(); } catch {}
+  try { await fetch("/api/diag/stop", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ agentId }) }); } catch {}
+  log("stopped");
+  verdict("stopped", "wait");
+  document.getElementById("start").disabled = false;
+  document.getElementById("stop").disabled = true;
+};
+</script>
+</body>
+</html>
