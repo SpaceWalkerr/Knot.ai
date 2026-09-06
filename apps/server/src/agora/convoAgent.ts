@@ -38,13 +38,15 @@ export interface RunningAgent {
   diag?: { ttsBlock: unknown; joinStatus: number; joinResponse: string };
 }
 
-// --- Turn detection / interruption. Explicit on purpose (do NOT rely on defaults). ---
-// Tune these live in the first test session.
-const VAD = {
-  threshold: 0.5, //   speech-probability gate (0..1). Lower = more sensitive.
-  prefix_padding_ms: 300, //   audio kept before detected speech start
-  silence_duration_ms: 640, //   trailing silence that ends the candidate's turn
-  interrupt_duration_ms: 160, //   candidate speech this long cuts off the agent (barge-in)
+// --- Turn detection / interruption. Runtime-tunable via POST /api/config/vad
+// (no redeploy) so it can be dialled in with a mic; the winning values then get
+// baked back in as these defaults. ---
+export const VAD: Record<string, number> = {
+  threshold: Number(process.env.VAD_THRESHOLD ?? 0.5), //   speech-probability gate (0..1). Higher = less twitchy.
+  prefix_padding_ms: Number(process.env.VAD_PREFIX_PADDING_MS ?? 300), //   audio kept before detected speech start
+  silence_duration_ms: Number(process.env.VAD_SILENCE_MS ?? 640), //   trailing silence that ends the candidate's turn
+  interrupt_duration_ms: Number(process.env.VAD_INTERRUPT_MS ?? 160), //   candidate speech this long cuts the agent off (barge-in)
+  enable_aivad: Number(process.env.VAD_ENABLE_AIVAD ?? 1), //   1 = Agora AI VAD on, 0 = plain energy VAD (tuning only)
 };
 
 function ttsParams(voiceHint: string) {
@@ -124,7 +126,7 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
       enable_string_uid: false,
       idle_timeout: 30,
       advanced_features: {
-        enable_aivad: true, // Agora's AI VAD — better turn-taking than plain VAD
+        enable_aivad: VAD.enable_aivad === 1, // Agora's AI VAD (runtime-tunable)
         enable_bhvs: true, // background-noise / human-voice suppression
       },
       // Agora-managed Deepgram ASR. credential_mode:"managed" is required.
@@ -157,7 +159,12 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
         max_history: 32,
       },
       tts: ttsParams(args.voiceHint),
-      vad: VAD,
+      vad: {
+        threshold: VAD.threshold,
+        prefix_padding_ms: VAD.prefix_padding_ms,
+        silence_duration_ms: VAD.silence_duration_ms,
+        interrupt_duration_ms: VAD.interrupt_duration_ms,
+      },
     },
   };
 

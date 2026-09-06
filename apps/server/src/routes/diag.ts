@@ -7,6 +7,7 @@ import {
   stopAgent,
   getAgentStatus,
   agentSpeak,
+  VAD,
 } from "../agora/convoAgent.js";
 
 /**
@@ -58,6 +59,18 @@ export function registerDiagRoutes(app: FastifyInstance): void {
       agentId,
       "This is a forced speak test from the Knot diagnostic. One. Two. Three."
     );
+  });
+
+  // Runtime turn-detection tuning — takes effect on the NEXT session's agent,
+  // no redeploy. Body: any subset of {threshold, prefix_padding_ms,
+  // silence_duration_ms, interrupt_duration_ms}.
+  app.get("/api/config/vad", async () => ({ ...VAD }));
+  app.post("/api/config/vad", async (req) => {
+    const body = (req.body as Record<string, unknown>) ?? {};
+    for (const k of Object.keys(VAD)) {
+      if (typeof body[k] === "number") VAD[k] = body[k] as number;
+    }
+    return { ...VAD, note: "applies to the next session's agent" };
   });
 
   app.post("/api/diag/stop", async (req) => {
