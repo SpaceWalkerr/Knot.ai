@@ -227,6 +227,20 @@ export async function startAgentMinimal(args: {
   };
 }
 
+/** DIAGNOSTIC: force the agent to speak a line via Agora's undocumented /speak. */
+export async function agentSpeak(agentId: string, text: string): Promise<unknown> {
+  const res = await request(
+    `${BASE}/${config.agora.appId}/agents/${agentId}/speak`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: authHeader() },
+      body: JSON.stringify({ text, priority: "INTERRUPT", interruptable: true }),
+    }
+  );
+  const body = await res.body.text();
+  return { httpStatus: res.statusCode, body };
+}
+
 export async function stopAgent(agentId: string): Promise<void> {
   if (config.agora.mock || agentId.startsWith("mock-")) {
     console.log(`[convoAgent:MOCK] stop ${agentId}`);

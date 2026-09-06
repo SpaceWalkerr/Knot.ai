@@ -2,7 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
 import { buildRtcToken } from "../agora/token.js";
-import { startAgentMinimal, stopAgent, getAgentStatus } from "../agora/convoAgent.js";
+import {
+  startAgentMinimal,
+  stopAgent,
+  getAgentStatus,
+  agentSpeak,
+} from "../agora/convoAgent.js";
 
 /**
  * Listen-only RTC diagnostic. `/api/diag/start` spins up a MINIMAL Agora agent
@@ -44,6 +49,14 @@ export function registerDiagRoutes(app: FastifyInstance): void {
   app.get("/api/diag/status/:agentId", async (req) => {
     const { agentId } = req.params as { agentId: string };
     return getAgentStatus(agentId);
+  });
+
+  app.post("/api/diag/speak/:agentId", async (req) => {
+    const { agentId } = req.params as { agentId: string };
+    return agentSpeak(
+      agentId,
+      "This is a forced speak test from the Knot diagnostic. One. Two. Three."
+    );
   });
 
   app.post("/api/diag/stop", async (req) => {

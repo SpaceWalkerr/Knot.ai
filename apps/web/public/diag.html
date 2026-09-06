@@ -17,6 +17,7 @@
 <body>
 <h1>Knot.ai — RTC audio diagnostic (listen-only, no mic)</h1>
 <button id="start">Start diagnostic</button>
+<button id="speak" disabled>Force /speak</button>
 <button id="stop" disabled>Stop</button>
 <div id="verdict" class="wait">idle</div>
 <pre id="log"></pre>
@@ -73,7 +74,15 @@ document.getElementById("start").onclick = async () => {
     log("ERROR", String(e));
   } finally {
     document.getElementById("stop").disabled = false;
+    document.getElementById("speak").disabled = false;
   }
+};
+
+document.getElementById("speak").onclick = async () => {
+  log("calling /speak on " + agentId + " …");
+  const r = await fetch("/api/diag/speak/" + agentId, { method: "POST" }).then(x => x.json()).catch(e => ({ err: String(e) }));
+  log("/speak ->", r);
+  log("(listen for audio in the next few seconds; watch the volume level lines)");
 };
 
 document.getElementById("stop").onclick = async () => {
