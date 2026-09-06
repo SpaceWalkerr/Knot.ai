@@ -49,25 +49,23 @@ const VAD = {
 
 function ttsParams(voiceHint: string) {
   if (config.tts.vendor === "minimax") {
-    // Exact shape of the working no-code console agent (confirmed by Agora
-    // support). The project's MiniMax is a MANAGED RESELLER resource: reference
-    // it by `resource_id`; do NOT send group_id / key / api key — the credential
-    // is not exposed. Keep params minimal — matching the known-good block.
+    // Agora-managed MiniMax. credential_mode:"managed" is REQUIRED — without it
+    // Agora can't resolve the managed key and the TTS stage silently fails to
+    // authenticate (agent joins, status RUNNING, publishes no audio).
     const params: Record<string, unknown> = {
+      url: config.tts.minimaxUrl, // required even with credential_mode:"managed"
       model: config.tts.minimaxModel, // "speech-2.8-turbo"
       voice_setting: {
-        // Per-persona voice, falling back to the single confirmed voice.
-        // NB only English_radiant_girl is confirmed working on this project.
         voice_id: config.tts.minimaxVoices[voiceHint] || config.tts.minimaxVoice,
       },
     };
     if (config.tts.minimaxResourceId) {
       params.resource_id = config.tts.minimaxResourceId;
-    } else if (config.tts.minimaxGroupId && config.tts.minimaxApiKey) {
-      // fallback: a company-owned MiniMax credential instead of the managed one
-      params.group_id = config.tts.minimaxGroupId;
-      params.key = config.tts.minimaxApiKey;
+      return { credential_mode: "managed", vendor: "minimax", params };
     }
+    // company-owned MiniMax credential instead of the managed one
+    params.group_id = config.tts.minimaxGroupId;
+    params.key = config.tts.minimaxApiKey;
     return { vendor: "minimax", params };
   }
   if (config.tts.vendor === "elevenlabs") {
@@ -129,14 +127,24 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
         enable_aivad: true, // Agora's AI VAD — better turn-taking than plain VAD
         enable_bhvs: true, // background-noise / human-voice suppression
       },
-      asr: { language: "en-US" },
+      // Agora-managed Deepgram ASR. credential_mode:"managed" is required.
+      asr: {
+        credential_mode: "managed",
+        vendor: config.agora.asrVendor,
+        params: {
+          url: config.agora.asrUrl,
+          model: config.agora.asrModel,
+          language: config.agora.asrLanguage,
+        },
+      },
       llm: {
-        // session id in the query string is how the proxy knows which
-        // interview this turn belongs to (Agora doesn't pass channel to the LLM).
+        // BYO: Agora calls OUR proxy so we can steer each turn. Session id in the
+        // query string tells the proxy which interview this is.
         url: `${config.publicBaseUrl}/v1/chat/completions?session=${encodeURIComponent(
           args.sessionId
         )}`,
         api_key: config.proxySharedSecret,
+        style: "openai",
         system_messages: [
           {
             role: "system",
@@ -144,13 +152,9 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
           },
         ],
         greeting_message: args.greeting,
-        params: { model: "knot-interviewer", max_tokens: 1024, temperature: 0.4 },
+        failure_message: "One moment.",
+        params: { model: "knot-interviewer", max_tokens: 1024 },
         max_history: 32,
-        input_modalities: ["text"],
-        // MUST include "audio" or the agent never synthesizes/publishes a voice
-        // track — it joins, runs, accepts /speak, and stays silent. This was THE
-        // bug behind the mute interviewer.
-        output_modalities: ["text", "audio"],
       },
       tts: ttsParams(args.voiceHint),
       vad: VAD,
@@ -208,19 +212,18 @@ export async function getAgentStatus(agentId: string): Promise<unknown> {
 }
 
 /**
- * DIAGNOSTIC: the stripped-down join the Agora concierge recommended — greeting
- * + TTS only, no llm.url, no vad/asr/advanced_features. If this agent speaks its
- * greeting, TTS + RTC publish work and the fault is in our full join body. If it
- * stays silent too, the fault is RTC token / channel / subscription.
+ * DIAGNOSTIC: byte-for-byte the console's working "Code" tab body — managed
+ * Deepgram ASR + managed OpenAI LLM + managed MiniMax TTS, all by resource_id.
+ * If THIS speaks, the console config works over REST and the only question is
+ * swapping the LLM for our proxy. If it stays silent, it's RTC/token/channel.
  */
 export async function startAgentMinimal(args: {
   channel: string;
   greeting: string;
 }): Promise<{ agentId: string; joinStatus: number; joinResponse: string }> {
-  // String-uid path, matching every Agora Convo AI example.
   const AGENT_ACCOUNT = "knot_agent";
   const body = {
-    name: `knotdiag-${nanoid(8)}`,
+    name: args.channel,
     properties: {
       channel: args.channel,
       token: buildRtcTokenStringUid(args.channel, AGENT_ACCOUNT),
@@ -228,21 +231,27 @@ export async function startAgentMinimal(args: {
       remote_rtc_uids: ["*"],
       enable_string_uid: true,
       idle_timeout: 30,
-      asr: { language: "en-US" },
-      // Full llm block pointed straight at OpenAI — mirrors Agora's own example.
-      // The pipeline may not initialise (and so never synthesize) without a
-      // reachable llm.url.
+      asr: {
+        credential_mode: "managed",
+        vendor: config.agora.asrVendor,
+        params: {
+          url: config.agora.asrUrl,
+          model: config.agora.asrModel,
+          language: config.agora.asrLanguage,
+        },
+      },
       llm: {
-        url: "https://api.openai.com/v1/chat/completions",
-        api_key: config.tts.openaiKey,
+        credential_mode: "managed",
+        vendor: "openai",
+        style: "openai",
+        url: config.agora.llmOpenaiUrl,
+        params: { model: "gpt-4.1-mini" },
         system_messages: [
           { role: "system", content: "You are a test agent. Reply in one short sentence." },
         ],
         greeting_message: args.greeting,
+        failure_message: "One moment.",
         max_history: 10,
-        input_modalities: ["text"],
-        output_modalities: ["text", "audio"],
-        params: { model: "gpt-4o-mini", max_tokens: 200 },
       },
       tts: ttsParams("neutral_female"),
     },

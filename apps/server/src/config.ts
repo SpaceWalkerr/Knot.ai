@@ -34,6 +34,25 @@ export const config = {
     restCustomerSecret: req("AGORA_REST_CUSTOMER_SECRET"),
     agentUid: Number(process.env.AGORA_AGENT_UID ?? 1000),
     mock: (process.env.MOCK_AGORA ?? "true").toLowerCase() === "true",
+    // ASR: the console's working agent uses Deepgram nova-3 via an Agora Managed
+    // Key referenced by resource_id. A bare {language} asr block leaves the ASR
+    // stage unconfigured and the whole pipeline never produces audio.
+    asrVendor: process.env.AGORA_ASR_VENDOR ?? "deepgram",
+    asrResourceId:
+      process.env.AGORA_ASR_RESOURCE_ID ?? "2ca6dcf4ded340b6b67f0ccf4972a00d",
+    asrModel: process.env.AGORA_ASR_MODEL ?? "nova-3",
+    asrLanguage: process.env.AGORA_ASR_LANGUAGE ?? "en",
+    // credential_mode:"managed" still needs the vendor's own endpoint URL.
+    asrUrl: process.env.AGORA_ASR_URL ?? "wss://api.deepgram.com/v1/listen",
+    llmOpenaiUrl:
+      process.env.AGORA_LLM_OPENAI_URL ??
+      "https://api.openai.com/v1/chat/completions",
+    // Optional: reference a published console agent config.
+    pipelineId: process.env.AGORA_PIPELINE_ID ?? "",
+    // Managed OpenAI LLM (diag only — the real flow uses our proxy via llm.url).
+    llmOpenaiResourceId:
+      process.env.AGORA_LLM_OPENAI_RESOURCE_ID ??
+      "24731f4ef93e4d33a85a4c4088633bcb",
   },
 
   tts: {
@@ -48,6 +67,8 @@ export const config = {
     // credential itself is never exposed. speech-2.8-turbo is the console agent's
     // model. Overridable in case the project's resource changes.
     minimaxModel: process.env.MINIMAX_TTS_MODEL ?? "speech-2.8-turbo",
+    minimaxUrl:
+      process.env.MINIMAX_TTS_URL ?? "wss://api.minimax.io/ws/v1/t2a_v2",
     minimaxResourceId:
       process.env.MINIMAX_RESOURCE_ID ?? "155b2afcadce4c93a85231c74e2e71d6",
     // Per-persona voices. A panel whose interviewers all sound identical reads
