@@ -68,6 +68,10 @@ export const config = {
     elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? "",
     azureKey: process.env.AZURE_TTS_KEY ?? "",
     azureRegion: process.env.AZURE_TTS_REGION ?? "",
+    // OpenAI TTS — key passed inline to Agora (works on a self-owned project).
+    openaiKey: process.env.OPENAI_API_KEY ?? "",
+    openaiModel: process.env.OPENAI_TTS_MODEL ?? "tts-1",
+    openaiVoice: process.env.OPENAI_TTS_VOICE ?? "nova",
   },
 
   dbPath: process.env.DB_PATH ?? "./data/knot.sqlite",
@@ -115,7 +119,11 @@ export function ttsReadiness(): TtsReadiness {
           ? !t.azureKey || !t.azureRegion
             ? "AZURE_TTS_KEY + AZURE_TTS_REGION"
             : ""
-          : ""; // "openai" is provisioned by Agora itself; nothing to check here
+          : t.vendor === "openai"
+            ? !t.openaiKey
+              ? "OPENAI_API_KEY"
+              : ""
+            : "";
   return { vendor: t.vendor, ready: missing === "", missing, mock: false };
 }
 

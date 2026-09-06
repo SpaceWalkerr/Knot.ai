@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
-import { buildRtcToken } from "../agora/token.js";
+import { buildRtcTokenStringUid } from "../agora/token.js";
 import {
   startAgentMinimal,
   stopAgent,
@@ -22,7 +22,7 @@ export function registerDiagRoutes(app: FastifyInstance): void {
       return reply.code(400).send({ error: "MOCK_AGORA is on — nothing to diagnose" });
     }
     const channel = `knotdiag-${nanoid(8)}`;
-    const listenerUid = Math.floor(Math.random() * 500_000) + 500_000;
+    const listenerUid = "knot_listener";
     const greeting =
       "Hello. This is the Knot dot AI diagnostic agent. If you can hear this sentence, " +
       "text to speech and audio publishing are both working.";
@@ -39,7 +39,8 @@ export function registerDiagRoutes(app: FastifyInstance): void {
       channel,
       agentUid: config.agora.agentUid,
       listenerUid,
-      listenerToken: buildRtcToken(channel, listenerUid),
+      stringUid: true,
+      listenerToken: buildRtcTokenStringUid(channel, listenerUid),
       agentId: agent.agentId,
       joinStatus: agent.joinStatus,
       joinResponse: agent.joinResponse,

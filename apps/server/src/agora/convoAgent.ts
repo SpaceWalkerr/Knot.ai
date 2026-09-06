@@ -1,7 +1,7 @@
 import { request } from "undici";
 import { nanoid } from "nanoid";
 import { config } from "../config.js";
-import { buildRtcToken } from "./token.js";
+import { buildRtcToken, buildRtcTokenStringUid } from "./token.js";
 
 /**
  * Thin client for Agora Conversational AI Engine (v2).
@@ -92,7 +92,22 @@ function ttsParams(voiceHint: string) {
       },
     };
   }
-  return { vendor: "openai", params: { voice: "alloy" } };
+  // OpenAI TTS. On a self-owned Agora project the key goes inline.
+  const OPENAI_VOICES: Record<string, string> = {
+    warm_male: "onyx",
+    warm_female: "shimmer",
+    neutral_male: "echo",
+    neutral_female: "nova",
+    brisk_female: "coral",
+  };
+  return {
+    vendor: "openai",
+    params: {
+      api_key: config.tts.openaiKey,
+      model: config.tts.openaiModel,
+      voice: OPENAI_VOICES[voiceHint] || config.tts.openaiVoice,
+    },
+  };
 }
 
 export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
@@ -132,7 +147,10 @@ export async function startAgent(args: StartAgentArgs): Promise<RunningAgent> {
         params: { model: "knot-interviewer", max_tokens: 1024, temperature: 0.4 },
         max_history: 32,
         input_modalities: ["text"],
-        output_modalities: ["text"],
+        // MUST include "audio" or the agent never synthesizes/publishes a voice
+        // track — it joins, runs, accepts /speak, and stays silent. This was THE
+        // bug behind the mute interviewer.
+        output_modalities: ["text", "audio"],
       },
       tts: ttsParams(args.voiceHint),
       vad: VAD,
@@ -199,15 +217,33 @@ export async function startAgentMinimal(args: {
   channel: string;
   greeting: string;
 }): Promise<{ agentId: string; joinStatus: number; joinResponse: string }> {
+  // String-uid path, matching every Agora Convo AI example.
+  const AGENT_ACCOUNT = "knot_agent";
   const body = {
-    name: `knotdiag-${args.channel}-${nanoid(6)}`,
+    name: `knotdiag-${nanoid(8)}`,
     properties: {
       channel: args.channel,
-      token: buildRtcToken(args.channel, config.agora.agentUid),
-      agent_rtc_uid: String(config.agora.agentUid),
+      token: buildRtcTokenStringUid(args.channel, AGENT_ACCOUNT),
+      agent_rtc_uid: AGENT_ACCOUNT,
       remote_rtc_uids: ["*"],
-      enable_string_uid: false,
-      llm: { greeting_message: args.greeting },
+      enable_string_uid: true,
+      idle_timeout: 30,
+      asr: { language: "en-US" },
+      // Full llm block pointed straight at OpenAI — mirrors Agora's own example.
+      // The pipeline may not initialise (and so never synthesize) without a
+      // reachable llm.url.
+      llm: {
+        url: "https://api.openai.com/v1/chat/completions",
+        api_key: config.tts.openaiKey,
+        system_messages: [
+          { role: "system", content: "You are a test agent. Reply in one short sentence." },
+        ],
+        greeting_message: args.greeting,
+        max_history: 10,
+        input_modalities: ["text"],
+        output_modalities: ["text", "audio"],
+        params: { model: "gpt-4o-mini", max_tokens: 200 },
+      },
       tts: ttsParams("neutral_female"),
     },
   };

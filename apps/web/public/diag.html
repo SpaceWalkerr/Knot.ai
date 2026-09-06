@@ -61,8 +61,26 @@ document.getElementById("start").onclick = async () => {
     client.on("exception", e => log("EVENT exception", e));
 
     await client.join(r.appId, r.channel, r.listenerToken || null, r.listenerUid);
-    log("joined channel " + r.channel + " as listener uid " + r.listenerUid);
-    verdict("in channel — waiting for the agent to publish audio…", "wait");
+    log("joined channel " + r.channel + " as uid " + r.listenerUid);
+
+    // Publish a synthetic (quiet tone) audio track so the agent sees a real
+    // publishing participant — some Convo AI setups won't speak into an
+    // otherwise-empty channel.
+    try {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      gain.gain.value = 0.02; // near-silent
+      osc.frequency.value = 110;
+      const dest = ac.createMediaStreamDestination();
+      osc.connect(gain); gain.connect(dest); osc.start();
+      const fakeMic = AgoraRTC.createCustomAudioTrack({ mediaStreamTrack: dest.stream.getAudioTracks()[0] });
+      await client.publish(fakeMic);
+      log("published synthetic audio track (near-silent 110Hz tone)");
+    } catch (e) {
+      log("could not publish synthetic track: " + e);
+    }
+    verdict("in channel + publishing — waiting for the agent to publish audio…", "wait");
 
     watch = setTimeout(async () => {
       const st = await fetch("/api/diag/status/" + agentId).then(x => x.json()).catch(e => ({ err: String(e) }));
